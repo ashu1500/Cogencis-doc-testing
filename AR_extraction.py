@@ -1,6 +1,7 @@
 import logging
 import os
 import deepdoctection as dd
+import psycopg2
 
 def get_page_metadata(input_pdf_path):
     ''' Get metadata of each page of pdf'''
@@ -104,11 +105,38 @@ def generate_exact_chunks(document_chunks):
     except Exception as e:
         logging.error(e)
 
+def create_connection():
+    ''' Create connection for the database'''
+    try:
+        connection = psycopg2.connect(database = 'cogencis_db',
+                                      user = 'postgres',
+                                      host = '44.195.87.244',
+                                      password = 'Cadmin123$',
+                                      port = 5432) 
+        return connection
+    except Exception as e:
+        logging.error(e)
+
+def update_file_content(file_id,file_name,file_content):
+    '''Upate file content in the database'''
+    try:
+        connection= create_connection()
+        current_connection= connection.cursor()
+        data_format="text"
+        current_connection.execute("INSERT INTO file_data (id, file_name, data_format,file_content) VALUES(%s,%s,%s,%s)", (file_id,file_name,data_format,file_content));
+        current_connection.close()
+    except Exception as e:
+        logging.error(e)
+
 def main():
     input_pdf_path= os.path.join("annual_reports","ril-annual-report-2019.pdf")
     document_chunks= get_required_details(input_pdf_path)
-    doc_chunk_list= generate_exact_chunks(document_chunks)
+    combined_chunks= combine_chunk_data(document_chunks)
+    # doc_chunk_list= generate_exact_chunks(document_chunks)
     logging.info("document processed")
-    logging.info(doc_chunk_list)
+    file_id="345679ihjgf"
+    file_name="RIL-ANNUAL-REPORT_2019"
+    update_file_content(file_id,file_name,combined_chunks)
+    logging.info("database updated")
 
 main()
