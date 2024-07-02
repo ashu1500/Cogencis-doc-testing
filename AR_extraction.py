@@ -125,7 +125,8 @@ def update_file_content(file_id,file_name,file_content):
         current_connection= connection.cursor()
         data_format="text"
         current_connection.execute("INSERT INTO file_parsed_data (file_id, file_name, data_format,file_content) VALUES(%s,%s,%s,%s)", (file_id,file_name,data_format,file_content));
-        current_connection.close()
+        connection.commit()
+        connection.close()
     except Exception as e:
         logging.error(e)
 
