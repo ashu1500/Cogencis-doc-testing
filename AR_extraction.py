@@ -2,6 +2,7 @@ import logging
 import os
 import deepdoctection as dd
 import psycopg2
+import json
 
 def get_page_metadata(input_pdf_path):
     ''' Get metadata of each page of pdf'''
@@ -110,7 +111,7 @@ def create_connection():
     try:
         connection = psycopg2.connect(database = 'cogencis_db',
                                       user = 'postgres',
-                                      host = '44.195.87.244',
+                                      host = '44.198.180.157',
                                       password = 'Cadmin123$',
                                       port = 5432) 
         return connection
@@ -123,20 +124,21 @@ def update_file_content(file_id,file_name,file_content):
         connection= create_connection()
         current_connection= connection.cursor()
         data_format="text"
-        current_connection.execute("INSERT INTO file_data (id, file_name, data_format,file_content) VALUES(%s,%s,%s,%s)", (file_id,file_name,data_format,file_content));
+        current_connection.execute("INSERT INTO file_parsed_data (file_id, file_name, data_format,file_content) VALUES(%s,%s,%s,%s)", (file_id,file_name,data_format,file_content));
         current_connection.close()
     except Exception as e:
         logging.error(e)
 
 def main():
-    input_pdf_path= os.path.join("annual_reports","ril-annual-report-2019.pdf")
+    input_pdf_path= os.path.join("annual_reports","HDFC Bank Ltd--AR--2019-2020.pdf")
     document_chunks= get_required_details(input_pdf_path)
     combined_chunks= combine_chunk_data(document_chunks)
+    json_data= json.dumps(combined_chunks)
     # doc_chunk_list= generate_exact_chunks(document_chunks)
     logging.info("document processed")
-    file_id="345679ihjgf"
-    file_name="RIL-ANNUAL-REPORT_2019"
-    update_file_content(file_id,file_name,combined_chunks)
+    file_id=3
+    file_name="HDFC-BANK-AR-2019-20"
+    update_file_content(file_id,file_name,str(json_data))
     logging.info("database updated")
 
 main()
