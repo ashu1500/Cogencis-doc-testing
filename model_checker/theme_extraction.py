@@ -128,11 +128,14 @@ def get_overall_document_summary(llm_model,chunk_list):
 
 
 def main():
-    llm_model= load_llama_model()
     titan_data= get_required_file_data(file_id=11)
     titan_actual_chunks= generate_exact_chunks(titan_data)
+    print("actual_chunks_generated")
     logging.info(titan_actual_chunks)
+    llm_model= load_llama_model()
+    print("llm_model_loaded")
     overall_doc_summary= get_overall_document_summary(llm_model,titan_actual_chunks)
+    print("overall summary generated")
     logging.info(overall_doc_summary)
 
 main()
