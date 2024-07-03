@@ -111,7 +111,7 @@ def create_connection():
     try:
         connection = psycopg2.connect(database = 'cogencis_db',
                                       user = 'postgres',
-                                      host = '44.198.180.157',
+                                      host = '3.238.139.215',
                                       password = 'Cadmin123$',
                                       port = 5432) 
         return connection
