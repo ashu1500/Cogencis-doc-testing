@@ -4,7 +4,11 @@ from transformers import pipeline
 from langchain_huggingface import HuggingFacePipeline
 from langchain_core.prompts import PromptTemplate
 import subprocess
+from sentence_transformers import SentenceTransformer
+from sentence_transformers.util import cos_sim
 from accelerate import Accelerator
+import textwrap
+import re
 accelerator = Accelerator()
 
 def load_llama_model():
@@ -22,6 +26,7 @@ def load_llama_model():
         logging.error(e)
 
 
+# THEME EXTRACTION
 def theme_extraction_per_chunk(chunk_text, llm):
     ''' Extract themes for each chunk'''
     try:
@@ -129,7 +134,9 @@ def get_final_transcript_themes(llm,input_list):
     except Exception as e:
         logging.error(e)
         raise e
+    
 
+#OVERALL DOCUMENT SUMMARY
 def get_chunk_summary(llm,input_text):
     ''' Get summary of each chunk'''
     try:
@@ -162,6 +169,234 @@ def get_overall_document_summary(llm_model,chunk_list):
     except Exception as e:
         logging.error(e)
         raise e
+
+
+#CHUNKS FILTERING
+
+def generate_embeddings(e5_model,chunk_text):
+    ''' Generate embeddings for the document chunks'''
+    try:
+        chunk_embeddings= e5_model.encode(chunk_text, normalize_embeddings=True)
+        return chunk_embeddings
+    except Exception as e:
+        logging.error(e)
+        raise e
+
+def get_relevant_chunks_per_theme(e5_model,theme,chunk_embedding_dict):
+    ''' Get relevant chunks for a theme'''
+    try:
+        relevant_chunk_list=[]
+        theme_embedding= generate_embeddings(e5_model,theme)
+        for chunk_text,chunk_embedding in chunk_embedding_dict.items():
+            if cos_sim(theme_embedding,chunk_embedding).item()>0.75:
+                relevant_chunk_list.append(chunk_text)
+        return relevant_chunk_list
+    except Exception as e:
+        logging.error(e)
+        raise e
+
+
+def filter_relevant_chunks(e5_model,themes_list,chunk_embeddings_dict):
+    ''' Get relevant chunks for each theme in the document'''
+    try:
+        required_chunk_data={}
+        for theme in themes_list:
+            required_chunk_data[theme]= get_relevant_chunks_per_theme(e5_model,theme,chunk_embeddings_dict)
+        return required_chunk_data
+    except Exception as e:
+        logging.error(e)
+        raise e
+
+
+#THEME-BASED SUMMARIZATION
+
+def extract_keywords_section(text):
+    """Post processing to extract keywords section from the text."""
+    try:
+        start_marker = "Extracted Keywords:\n"
+        keyword_prefix = r"\d+\. "
+        start_index = text.index(start_marker) + len(start_marker)
+        end_index = text.find("\n\n", start_index)
+        keywords_section = text[start_index:end_index]
+        keywords_list = [keyword.strip() for keyword in keywords_section.split("\n")]
+        cleaned_list = [re.sub(keyword_prefix, "", keyword).strip() for keyword in keywords_list]
+        return cleaned_list
+    except ValueError as e:
+        logging.warning("Keywords section not found in the text: %s", e)
+        raise e
+    except Exception as e:
+        logging.error("Unexpected error while extracting keywords: %s", e)
+        raise e
+    
+
+def keywords_theme_extraction(theme, text, llm):
+    """ Extract keywords from the text based on the theme."""
+    try:
+        template = """
+        As an AI assistant specializing in thematic analysis and keyword extraction, your task is to identify and list the most significant keywords from the given text that are highly relevant to the specified theme.
+        Focus on extracting keywords that capture the essence of the theme and its representation in the text.Identify keywords that are directly related to the theme.
+        Include industry-specific terms, jargon, or technical vocabulary relevant to the theme.
+        Extract keywords that represent key concepts, ideas, or trends within the theme.
+        Consider both explicit mentions and implicit references to the theme.
+        Prioritize keywords that would be most valuable for a financial equity analyst.Extract proper nouns (e.g., company names, products) that are significant to the theme.
+        Theme: {theme}
+        Context:
+        {text}
+
+        Extracted Keywords:
+        """
+        prompt = PromptTemplate(template=template, input_variables=["theme", "text"])
+        result = llm.generate([prompt.format(theme=theme, text=text)])
+        final = extract_keywords_section(result.generations[0][0].text)
+        return final
+    except Exception as e:
+        logging.error("Error extracting keywords: %s", e)
+        raise e
+    
+
+def extract_summary_section_perchunk(text):
+    """Post processing to extract summary section from the text."""
+    try:
+        keyword = "SUMMARY:"
+        keyword_pos = text.find(keyword)
+        if keyword_pos != -1:
+            summary = text[keyword_pos + len(keyword):].strip()
+            return summary
+        else:
+            logging.warning("Keyword 'SUMMARY' not found in the text.")
+            return None
+    except Exception as e:
+        logging.error("Unexpected error while extracting summary section per chunk: %s", e)
+        raise e
+    
+
+
+def summary_generation_perchunk(keyword_list, text, llm):
+    """Generate summary for each chunk based on the keywords."""
+    try:
+        template = """
+            Analyze the following text enclosed in curly brackets based on the given keywords enclosed in brackets.
+            Generate a summary that includes both factual and inferential points, building a coherent narrative around the theme.
+            Your summary should consist of exactly 10 points, each point having at least 20 words long.Include a mix of direct observations and inferences drawn from the text.
+            Build a story that flows logically from one point to the next.Prioritize information relevant to a financial equity analyst.Avoid using question formats or explicit headers.
+            {text}
+            [Keywords: {keywords}]
+            SUMMARY:
+            """
+        prompt = PromptTemplate(template=template, input_variables=["text", "keywords"])
+        result = llm.generate([prompt.format(text=text, keywords=keyword_list)])
+        final = extract_summary_section_perchunk(result.generations[0][0].text)
+        return final
+    except Exception as e:
+        logging.error("Error generating summary per chunk: %s", e)
+        raise e
+    
+def extract_summary_section(text):
+    """Extract the final summary from the text."""
+    keyword = "FINAL SUMMARY:"
+    try:
+        keyword_pos = text.find(keyword)
+        if keyword_pos != -1:
+            summary = text[keyword_pos + len(keyword):].strip()
+            points = re.findall(r'\d+\.\s.*', summary)
+            bullet_points = '\n'.join([f'• {point.split(" ", 1)[1]}' for point in points])
+            return bullet_points
+        else:
+            logging.warning("Keyword 'FINAL SUMMARY' not found in the text.")
+            return None
+    except Exception as e:
+        logging.error("Unexpected error while extracting summary section: %s", e)
+        raise e
+    
+
+def get_final_summary(text, llm):
+    """Generate the final summary"""
+    try:
+        template = """
+        You are an AI assistant where you analyze the following text enclosed in curly brackets and generate a summary.
+        Your summary should  consist of exactly 10 points, each at least 20 words long. Blend factual information with insightful inferences.
+        Ensure a logical flow between points, telling a story about the theme.Prioritize information relevant to a financial equity analyst.
+        Avoid repetition and ensure each point adds new value to the narrative. Remove any category labels, focusing solely on the content.
+        {text}
+        FINAL SUMMARY:
+        """
+        prompt = PromptTemplate(template=template, input_variables=["text"])
+        result = llm.generate([prompt.format(text=text)])
+        final = extract_summary_section(result.generations[0][0].text)
+        return final
+    except Exception as e:
+        logging.error("Error generating final summary: %s", e)
+        raise e
+    
+
+def remove_headers(text):
+    """Remove headers and generate as bullet points"""
+    try:
+        lines = text.strip().split("\n")
+        processed_lines = []
+        for line in lines:
+            if line.startswith("•"):
+                colon_pos = line.find(":")
+                if colon_pos != -1:
+                    processed_line = "• " + line[colon_pos + 1:].strip()
+                else:
+                    processed_line = line.strip()
+                processed_lines.append(processed_line)
+            else:
+                processed_lines.append(line.strip())
+        processed_text = "\n".join(processed_lines)
+        return processed_text
+    except Exception as e:
+        logging.error("Error removing headers: %s", e)
+        raise e
+    
+
+def generate_theme_summary(theme, chunk_data, llm):
+    ''' Generate summary for a theme'''
+    try:
+        combined_summary= ""
+        for chunk in chunk_data:
+            keywords_list = keywords_theme_extraction(theme, chunk, llm)
+            chunk_summary = summary_generation_perchunk(keywords_list, chunk, llm)
+            combined_summary += chunk_summary
+        actual_list= [x.strip() for x in combined_summary.split('\n')]
+        joined_summary= "".join(actual_list)
+        summary_list= textwrap.wrap(joined_summary,14000)
+        output_summary=""
+        for summary in summary_list:
+            generated_summary= get_final_summary(summary,llm)
+            output_summary+=generated_summary
+        final_summary= remove_headers(output_summary)
+        return final_summary
+    except Exception as e:
+        logging.error(e)
+        raise e
+    
+
+def get_document_theme_summary(chunk_dictionary,llm):
+    '''Get theme-based summary of document'''
+    try:
+        theme_based_summary={}
+        for theme,chunk in chunk_dictionary.items():
+            if chunk:
+                print("Theme summary started")
+                theme_based_summary[theme]= generate_theme_summary(theme,chunk,llm)
+                print("Theme summary generated")
+            else:
+                continue
+        return theme_based_summary
+    except Exception as e:
+        logging.error(e)
+        raise e
+
+
+
+
+
+
+
+
+
 
 
 def main():
@@ -204,8 +439,18 @@ def main():
     transcript_themes= get_final_transcript_themes(llm_model,tcs_chunks)
     print("all themes generated")
     print(transcript_themes)
-    overall_doc_summary= get_overall_document_summary(llm_model,tcs_chunks)
-    print("Overall summary generated")
-    print(overall_doc_summary)
+    # overall_doc_summary= get_overall_document_summary(llm_model,tcs_chunks)
+    # print("Overall summary generated")
+    # print(overall_doc_summary)
+    e5_embedding_model = SentenceTransformer('intfloat/e5-large')
+    chunk_embedding_pair={}
+    for chunk_text in tcs_chunks:
+        chunk_embedding= generate_embeddings(e5_embedding_model,chunk_text)
+        chunk_embedding_pair[chunk_text]= chunk_embedding
+    relevant_chunks_dict= filter_relevant_chunks(e5_embedding_model,transcript_themes,chunk_embedding_pair)
+    theme_based_summary= get_document_theme_summary(relevant_chunks_dict,llm_model)
+    print("Final theme based summary generated")
+    print(theme_based_summary)
+
 
 main()
