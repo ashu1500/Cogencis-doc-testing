@@ -357,7 +357,9 @@ def generate_theme_summary(theme, chunk_data, llm):
         combined_summary= ""
         for chunk in chunk_data:
             keywords_list = keywords_theme_extraction(theme, chunk, llm)
+            print("Keywords generated")
             chunk_summary = summary_generation_perchunk(keywords_list, chunk, llm)
+            print("Summary per chunk generated")
             combined_summary += chunk_summary
         actual_list= [x.strip() for x in combined_summary.split('\n')]
         joined_summary= "".join(actual_list)
