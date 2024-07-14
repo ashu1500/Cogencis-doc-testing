@@ -3,7 +3,6 @@ import logging
 from transformers import pipeline
 from langchain_huggingface import HuggingFacePipeline
 from langchain_core.prompts import PromptTemplate
-from langchain.chains import LLMChain
 import subprocess
 from accelerate import Accelerator
 accelerator = Accelerator()
@@ -113,13 +112,13 @@ def get_final_transcript_themes(llm,input_list):
         all_chunk_header=[]
         actual_chunk_headers=[]
         for items in input_list:
-            logging.info("Theme generation")
+            print("Theme generation")
             chunk_txt= theme_extraction_per_chunk(items,llm)
             chunk_header= extract_headers_from_themes(chunk_txt.generations[0][0].text)
             chunk_headers_list.append(chunk_header)
         for header in chunk_headers_list:
             all_chunk_header+=header
-        logging.info("All themes generated")
+        print("All themes generated")
         ls=[actual_chunk_headers.append(x) for x in all_chunk_header if x not in actual_chunk_headers]
         top_themes= extract_top_themes(actual_chunk_headers,llm)
         generated_themes=extract_headers_from_important_points(top_themes.generations[0][0].text)
@@ -141,8 +140,8 @@ def get_chunk_summary(llm,input_text):
                     SUMMARY:
                  """
         prompt = PromptTemplate(template=template, input_variables=["text"])
-        llm_chain = LLMChain(prompt=prompt, llm=llm)
-        text_summary= llm_chain.run(input_text)
+        llm_chain = prompt | llm
+        text_summary= llm_chain.invoke(input_text)
         summary_parts= text_summary.split('SUMMARY:\n',1)
         chunk_summary=summary_parts[1].strip()
         return chunk_summary
@@ -155,8 +154,10 @@ def get_overall_document_summary(llm_model,chunk_list):
     try:
         summary=""
         for text_chunk in chunk_list:
+            print("Chunk summary started")
             input_data= text_chunk+summary
             summary= get_chunk_summary(llm_model,input_data)
+            print("Chunk summary generated")
         return summary
     except Exception as e:
         logging.error(e)
