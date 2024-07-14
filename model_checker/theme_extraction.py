@@ -5,6 +5,8 @@ from langchain_huggingface import HuggingFacePipeline
 from langchain_core.prompts import PromptTemplate
 from langchain.chains import LLMChain
 import subprocess
+from accelerate import Accelerator
+accelerator = Accelerator()
 
 def load_llama_model():
     try:
@@ -12,7 +14,8 @@ def load_llama_model():
         hf_token="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"
         subprocess.run(f'huggingface-cli login --token={hf_token}',shell=True)
         model_path= os.path.join("model")
-        model_pipe = pipeline(task="text-generation", model = model_path,tokenizer= model_path)
+        model_pipe = pipeline(task="text-generation", model = model_path,tokenizer= model_path,device_map="auto")
+        model_pipe = accelerator.prepare(model_pipe)
         final_pipeline= HuggingFacePipeline(pipeline = model_pipe, model_kwargs = {'temperature':0})
         logging.info("model loaded successfully")
         return final_pipeline
@@ -198,8 +201,10 @@ def main():
     llm_model= load_llama_model()
     print("llm_model_loaded")
     transcript_themes= get_final_transcript_themes(llm_model,tcs_chunks)
-    # overall_doc_summary= get_overall_document_summary(llm_model,titan_actual_chunks)
     print("all themes generated")
     print(transcript_themes)
+    overall_doc_summary= get_overall_document_summary(llm_model,tcs_chunks)
+    print("Overall summary generated")
+    print(overall_doc_summary)
 
 main()
