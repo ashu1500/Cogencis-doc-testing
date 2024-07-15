@@ -12,23 +12,24 @@ import re
 import datetime
 import torch
 import gc
+from accelerate import Accelerator
+accelerator = Accelerator()
 
 def load_llama_model():
+    ''' Load llama model from the local folder'''
     try:
         logging.info("llama model loading")
         hf_token="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"
         subprocess.run(f'huggingface-cli login --token={hf_token}',shell=True)
         model_path= os.path.join("model")
-        model_pipe = pipeline(task="text-generation", model = model_path,tokenizer= model_path,device=0)
-        model=model_pipe.model
-        model = torch.nn.DataParallel(model)
-        model = model.to('cuda')
-        model_pipe.model = model
+        model_pipe = pipeline(task="text-generation", model = model_path,tokenizer= model_path,device_map="auto")
+        model_pipe= accelerator.prepare(model_pipe)
         final_pipeline= HuggingFacePipeline(pipeline = model_pipe, model_kwargs = {'temperature':0})
         logging.info("model loaded successfully")
         return final_pipeline
     except Exception as e:
         logging.error(e)
+        raise e
 
 
 # THEME EXTRACTION
@@ -448,19 +449,15 @@ def main():
     transcript_themes= get_final_transcript_themes(llm_model,tcs_chunks)
     print("all themes generated")
     print(transcript_themes)
-    torch.cuda.empty_cache()
     overall_doc_summary= get_overall_document_summary(llm_model,tcs_chunks)
     print("Overall summary generated")
     print(overall_doc_summary)
-    torch.cuda.empty_cache()
     e5_embedding_model = SentenceTransformer('intfloat/e5-large')
     chunk_embedding_pair={}
     for chunk_text in tcs_chunks:
         chunk_embedding= generate_embeddings(e5_embedding_model,chunk_text)
         chunk_embedding_pair[chunk_text]= chunk_embedding
     relevant_chunks_dict= filter_relevant_chunks(e5_embedding_model,transcript_themes,chunk_embedding_pair)
-    gc.disable()
-    torch.cuda.empty_cache()
     theme_based_summary= get_document_theme_summary(relevant_chunks_dict,llm_model)
     print("Final theme based summary generated")
     print(theme_based_summary)
