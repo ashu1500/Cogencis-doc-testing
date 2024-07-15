@@ -440,29 +440,29 @@ def main():
                 "Rajesh Gopinathan: We do not do that. We honor all offers that we make. We do not defer joining or do any form of such management. That's not part of our philosophy. Any offer that we make, we honor it based on whatever is the timeline committed on it. Moderator: The next question is from the line of Apurva Prasad from HDFC Securities. Please go ahead. Apurva Prasad: Rajesh, just a couple of quick ones. Most of the others have been covered. So, first one is on pricing. Are you seeing any incremental challenges in getting price increase even though that being selective say versus the previous quarter? And the second question is on Retail and CPG. Are there some early signs of some softness there, and I'm referencing to the book-to-bill has been significantly higher than the past three years, this looks excellent down a lot more. Rajesh Gopinathan: No, on pricing, actually, the conversations are picking up momentum rather than losing momentum. So, absolutely no reflection there. On retail, those TCV numbers are normal nature of TCV rather than anything else. We are seeing very strong transformation agendas across many retailers, especially grocery and essential retailers, where significant transformation programs are getting executed and we see continuing demand. So, overall the pipeline is quite strong and the demand environment also in retail is very strong. Moderator: Ladies and gentlemen, that was the last question for today. I now hand the conference over to the management for the closing comments. Rajesh Gopinathan: Thank you. It has been a good start to the year with 15.5% growth in constant currency, and with all our industry verticals showing good growth. Our order book and pipeline is also very strong, giving us good visibility for the next few months. Our margin dipped this quarter due to salary increase and supply side related costs. But we stay confident in our ability to bring it back to a preferred range over time",
                 'Rajesh Gopinathan: Thank you. It has been a good start to the year with 15.5% growth in constant currency, and with all our industry verticals showing good growth. Our order book and pipeline is also very strong, giving us good visibility for the next few months. Our margin dipped this quarter due to salary increase and supply side related costs. But we stay confident in our ability to bring it back to a preferred range over time. : Page 19 of 20 Tata Consultancy Services Q1 & FY23 Earnings Conference Call July 08, 2022, 19:00 pm IST (09:30 hrs US ET) On the people front, we continue to hire across all our markets and added over 14,000 employees on a net basis in Q1. Our attrition continues to be elevated at 19.7% in IT services on an LTM basis. This will probably peak next quarter and will start tapering out. With that we wrap up our call. Thank you all for joining us on this call today. Enjoy the rest of your evening or day and stay safe. Moderator: Thank you members of the management. On behalf of TCS that concludes this conference. Thank you all for joining us and you may now disconnect your lines. Note: This transcript has been edited for readability and does not purport to be a verbatim record of the proceedings. : Page 20 of 20'
             ]
-    with torch.no_grad():
-        llm_model= load_llama_model()
-        print("llm_model_loaded")
-        transcript_themes= get_final_transcript_themes(llm_model,tcs_chunks)
-        print("all themes generated")
-        print(transcript_themes)
-        torch.cuda.empty_cache()
-        overall_doc_summary= get_overall_document_summary(llm_model,tcs_chunks)
-        print("Overall summary generated")
-        print(overall_doc_summary)
-        torch.cuda.empty_cache()
-        e5_embedding_model = SentenceTransformer('intfloat/e5-large')
-        chunk_embedding_pair={}
-        for chunk_text in tcs_chunks:
-            chunk_embedding= generate_embeddings(e5_embedding_model,chunk_text)
-            chunk_embedding_pair[chunk_text]= chunk_embedding
-        relevant_chunks_dict= filter_relevant_chunks(e5_embedding_model,transcript_themes,chunk_embedding_pair)
-        gc.disable()
-        torch.cuda.empty_cache()
-        theme_based_summary= get_document_theme_summary(relevant_chunks_dict,llm_model)
-        print("Final theme based summary generated")
-        print(theme_based_summary)
-        print(datetime.datetime.now())
+    
+    llm_model= load_llama_model()
+    print("llm_model_loaded")
+    transcript_themes= get_final_transcript_themes(llm_model,tcs_chunks)
+    print("all themes generated")
+    print(transcript_themes)
+    torch.cuda.empty_cache()
+    overall_doc_summary= get_overall_document_summary(llm_model,tcs_chunks)
+    print("Overall summary generated")
+    print(overall_doc_summary)
+    torch.cuda.empty_cache()
+    e5_embedding_model = SentenceTransformer('intfloat/e5-large')
+    chunk_embedding_pair={}
+    for chunk_text in tcs_chunks:
+        chunk_embedding= generate_embeddings(e5_embedding_model,chunk_text)
+        chunk_embedding_pair[chunk_text]= chunk_embedding
+    relevant_chunks_dict= filter_relevant_chunks(e5_embedding_model,transcript_themes,chunk_embedding_pair)
+    gc.disable()
+    torch.cuda.empty_cache()
+    theme_based_summary= get_document_theme_summary(relevant_chunks_dict,llm_model)
+    print("Final theme based summary generated")
+    print(theme_based_summary)
+    print(datetime.datetime.now())
 
 
 main()
