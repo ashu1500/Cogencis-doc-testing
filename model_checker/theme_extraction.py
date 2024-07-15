@@ -12,7 +12,6 @@ import re
 import datetime
 import torch
 import gc
-accelerator = Accelerator()
 
 def load_llama_model():
     try:
@@ -20,8 +19,11 @@ def load_llama_model():
         hf_token="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"
         subprocess.run(f'huggingface-cli login --token={hf_token}',shell=True)
         model_path= os.path.join("model")
-        model_pipe = pipeline(task="text-generation", model = model_path,tokenizer= model_path,device=accelerator.device)
-        model_pipe = accelerator.prepare(model_pipe)
+        model_pipe = pipeline(task="text-generation", model = model_path,tokenizer= model_path,device=0)
+        model=model_pipe.model
+        model = torch.nn.DataParallel(model)
+        model = model.to('cuda')
+        model_pipe.model = model
         final_pipeline= HuggingFacePipeline(pipeline = model_pipe, model_kwargs = {'temperature':0})
         logging.info("model loaded successfully")
         return final_pipeline
