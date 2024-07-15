@@ -9,6 +9,7 @@ from sentence_transformers.util import cos_sim
 from accelerate import Accelerator
 import textwrap
 import re
+import datetime
 accelerator = Accelerator()
 
 def load_llama_model():
@@ -188,7 +189,7 @@ def get_relevant_chunks_per_theme(e5_model,theme,chunk_embedding_dict):
         relevant_chunk_list=[]
         theme_embedding= generate_embeddings(e5_model,theme)
         for chunk_text,chunk_embedding in chunk_embedding_dict.items():
-            if cos_sim(theme_embedding,chunk_embedding).item()>0.75:
+            if cos_sim(theme_embedding,chunk_embedding).item()>0.76:
                 relevant_chunk_list.append(chunk_text)
         return relevant_chunk_list
     except Exception as e:
@@ -277,7 +278,7 @@ def summary_generation_perchunk(keyword_list, text, llm):
         template = """
             Analyze the following text enclosed in curly brackets based on the given keywords enclosed in brackets.
             Generate a summary that includes both factual and inferential points, building a coherent narrative around the theme.
-            Your summary should consist of exactly 10 points, each point having at least 20 words long.Include a mix of direct observations and inferences drawn from the text.
+            Your summary should consist of exactly 5 points, each point having at least 20 words long.Include a mix of direct observations and inferences drawn from the text.
             Build a story that flows logically from one point to the next.Prioritize information relevant to a financial equity analyst.Avoid using question formats or explicit headers.
             {text}
             [Keywords: {keywords}]
@@ -402,6 +403,7 @@ def get_document_theme_summary(chunk_dictionary,llm):
 
 
 def main():
+    print(datetime.datetime.now())
     tcs_chunks= ["Unfortunately, Mr. Milind Lakkad – our Chief HR Officer could not join us today due to a bereavement in his family. Our management team will give a brief overview of the company’s performance, followed by a Q&A session. As you are aware, we do not provide specific revenue or earnings guidance. And anything said on this call which reflects our outlook for the future. or which could be construed as a forward-looking statement, must be reviewed in conjunction with the risks that the company faces. We have outlined these risks in the second slide of the quarterly fact sheet available on our website and mailed out to those who have subscribed to our mailing list. With that, I’d like to turn the call over to Rajesh. Rajesh Gopinathan: Thank you, Kedar, and good morning, good afternoon and good evening to all of you. We are starting out in FY 23 on a strong note, growing 16.2% in rupee terms, 15.5% in constant currency terms and 10.2% in dollar terms. : Page 1 of 20 Tata Consultancy Services Q1 & FY23 Earnings Conference Call July 08, 2022, 19:00 pm IST (09:30 hrs US ET) We announced our salary increases with effect from April 1st. Reflecting that and other employee costs we incurred in Q1, our operating margin for the quarter was at 23.1%, a contraction of 1.9% sequentially and 2.4% year-on-year. Net margin was at 18%. I will now invite Samir and NGS to go over different aspects of our performance during the quarter. I'll step in again later to provide some more color on the demand trends that we're seeing. Over to you, Samir. Samir Seksaria: Thank you, Rajesh. Let me first walk you through the headline number. In the first quarter of FY 23 our revenue grew 15.5% YoY on a constant currency basis. Reported revenue in INR was `527.58 billion, a year-on-year growth of 16.2%. In dollar terms, revenue was $6.78 billion, a year-on-year growth of 10.2%. Let me now go over the financials",
                  "I'll step in again later to provide some more color on the demand trends that we're seeing. Over to you, Samir. Samir Seksaria: Thank you, Rajesh. Let me first walk you through the headline number. In the first quarter of FY 23 our revenue grew 15.5% YoY on a constant currency basis. Reported revenue in INR was `527.58 billion, a year-on-year growth of 16.2%. In dollar terms, revenue was $6.78 billion, a year-on-year growth of 10.2%. Let me now go over the financials. As Rajesh mentioned, we announced salary increases of 5% to 8% and much higher for top performers with effect from April 1. This had a 1.5% impact on operating margins. Continued supply side challenges entailed additional expenses, such as backfilling expenses and higher subcontractor usage. This and normalizing travel expenses negated various operational efficiencies, resulting in an operating margin of 23.1%, a sequential contraction of 1.9%. Net income margin was at 18%. Our effective tax rate for the quarter was 25.5% and our accounts receivable was at 63 day sales outstanding in dollar terms, down one day compared to Q4. Net cash from operations was ₹108.1 billion, which is a cash conversion of 114%. Free cash flows were ₹100.68 billion. Invested funds as on 30th June stood at ₹527.6 billion, and the board has recommended an interim dividend of ₹8 per share. Since Milind is not here today, I will take you through the HR numbers now. On the people front, our workforce strength crossed the 600,000 mark this quarter, ending this quarter with 606,331 employees. We continue to hire talent from across the world, with a net addition of 14,136. It is a very diverse workforce with 153 nationalities represented and with the women making up 35.5% of the base. We remain committed to investing in organic talent development towards building the next generation G&T workforce. In Q1, TCSers clocked 12 million learning hours, resulting in the acquisition of 1.7 million competencies",
                 'We continue to hire talent from across the world, with a net addition of 14,136. It is a very diverse workforce with 153 nationalities represented and with the women making up 35.5% of the base. We remain committed to investing in organic talent development towards building the next generation G&T workforce. In Q1, TCSers clocked 12 million learning hours, resulting in the acquisition of 1.7 million competencies. LTM attrition in IT services was at 19.7%, and we think it will rise further in Q2, after which it should start tapering. Now over to you, NGS, for some color on our segments and products and platforms. N G Subramaniam: Thank you, Samir. Let me walk you through our segmental performance details for the quarter. All the growth numbers are on year-on-year constant currency basis. : Page 2 of 20 Tata Consultancy Services Q1 & FY23 Earnings Conference Call July 08, 2022, 19:00 pm IST (09:30 hrs US ET) All our verticals showed good growth in Q1. Growth was led by Retail and CPG which grew 25.1% after a similar strong growth last quarter, Communications and Media grew 19.6%, while the Manufacturing as well as Technology & Services verticals both grew 16.4%. BFSI, our largest vertical, grew 13.9% while Life Sciences and healthcare grew by 11.9%. By geography, growth was led by North America which grew 19.1%. UK grew 12.6%, while continental Europe grew 12.1%. In emerging markets, India grew by 20.8%, Asia Pacific grew 6.2%, Latin America by 21.6% and Middle East and Africa grew by 3.2%. Our portfolio of products and platforms continue to do well. ignio™, our cognitive automation software suite signed up 28 new customers and five clients went live during the quarter. In addition, 15 existing clients acquired new licenses of the suite during the quarter. TCS filed three patents around ignio during the quarter and was granted one. The market demand for ignio trained professional continue to grow',
@@ -441,9 +443,9 @@ def main():
     transcript_themes= get_final_transcript_themes(llm_model,tcs_chunks)
     print("all themes generated")
     print(transcript_themes)
-    # overall_doc_summary= get_overall_document_summary(llm_model,tcs_chunks)
-    # print("Overall summary generated")
-    # print(overall_doc_summary)
+    overall_doc_summary= get_overall_document_summary(llm_model,tcs_chunks)
+    print("Overall summary generated")
+    print(overall_doc_summary)
     e5_embedding_model = SentenceTransformer('intfloat/e5-large')
     chunk_embedding_pair={}
     for chunk_text in tcs_chunks:
@@ -453,6 +455,7 @@ def main():
     theme_based_summary= get_document_theme_summary(relevant_chunks_dict,llm_model)
     print("Final theme based summary generated")
     print(theme_based_summary)
+    print(datetime.datetime.now())
 
 
 main()
