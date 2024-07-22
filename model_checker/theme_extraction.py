@@ -316,7 +316,7 @@ def get_final_summary(text, llm):
     try:
         template = """
         You are an AI assistant where you analyze the following text enclosed in curly brackets and generate a summary.
-        Your summary should  consist of exactly 10 points, each at least 20 words long. Blend factual information with insightful inferences.
+        Your summary should  consist of exactly 10 bullet points, each at least 20 words long. Blend factual information with insightful inferences.
         Ensure a logical flow between points, telling a story about the theme.Prioritize information relevant to a financial equity analyst.
         Avoid repetition and ensure each point adds new value to the narrative. Remove any category labels, focusing solely on the content.
         {text}
