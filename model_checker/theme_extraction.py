@@ -372,8 +372,9 @@ def generate_theme_summary(theme, chunk_data, llm):
         for summary in summary_list:
             generated_summary= get_final_summary(summary,llm)
             output_summary+=generated_summary
+        final_summary= get_final_summary(output_summary,llm)
         # final_summary= remove_headers(output_summary)
-        return output_summary
+        return final_summary
     except Exception as e:
         logging.error(e)
         raise e
