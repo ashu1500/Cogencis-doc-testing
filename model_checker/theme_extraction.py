@@ -362,10 +362,10 @@ def remove_headers(text):
 def generate_chunk_summary(theme,chunk_text):
     ''' Generate final chunk summary'''
     try:
-        keywords_list= keywords_theme_extraction(theme,chunk_text,llm)
+        keywords_list= keywords_theme_extraction(theme,chunk_text,llm_model)
         logging.debug("keywords generated")
         logging.debug(datetime.datetime.now())
-        chunk_summary = summary_generation_perchunk(keywords_list, chunk_text, llm)
+        chunk_summary = summary_generation_perchunk(keywords_list, chunk_text, llm_model)
         logging.debug("Chunk theme summary generated")
         logging.debug(datetime.datetime.now())
         return chunk_summary
@@ -411,14 +411,14 @@ def generate_theme_summary(theme, chunk_data):
         raise e
     
 
-def get_document_theme_summary(chunk_dictionary,llm):
+def get_document_theme_summary(chunk_dictionary):
     '''Get theme-based summary of document'''
     try:
         theme_based_summary={}
         for theme,chunk in chunk_dictionary.items():
             if chunk:
                 print("Theme summary started")
-                theme_based_summary[theme]= generate_theme_summary(theme,chunk,llm)
+                theme_based_summary[theme]= generate_theme_summary(theme,chunk)
                 print("Theme summary generated")
             else:
                 continue
@@ -447,7 +447,7 @@ def get_final_output(chunk_data):
         chunk_embedding_pair[chunk_text]= chunk_embedding
     relevant_chunks_dict= filter_relevant_chunks(e5_embedding_model,transcript_themes,chunk_embedding_pair)
     
-    theme_based_summary= get_document_theme_summary(relevant_chunks_dict,llm_model)
+    theme_based_summary= get_document_theme_summary(relevant_chunks_dict)
     print("Final theme based summary generated")
     # print(theme_based_summary)
     return theme_based_summary
