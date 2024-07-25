@@ -375,14 +375,14 @@ def generate_chunk_summary(theme,chunk_text):
         logging.error(ex)
 
 def process_files_in_parallel(chunk_content,theme, max_workers=2):
-    results = []
+    results = ""
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_file = {executor.submit(generate_chunk_summary,theme, chunk_data): chunk_data for chunk_data in chunk_content}
         for future in concurrent.futures.as_completed(future_to_file):
             file_path = future_to_file[future]
             try:
                 result = future.result()
-                results.append(result)
+                results+= result
             except Exception as exc:
                 results.append(f"{file_path} generated an exception: {exc}")
     return results
