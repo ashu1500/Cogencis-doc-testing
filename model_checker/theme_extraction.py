@@ -11,9 +11,10 @@ import textwrap
 import re
 import datetime
 import torch
-import gc
+import numpy as np
 from accelerate import Accelerator
 import concurrent.futures
+
 accelerator = Accelerator()
 
 
@@ -431,6 +432,7 @@ def get_document_theme_summary(chunk_dictionary):
 
 def get_final_output(chunk_data):
     print(datetime.datetime.now())
+    np.random.seed(42)
     transcript_themes= get_final_transcript_themes(llm_model,chunk_data)
     print("all themes generated")
     print(datetime.datetime.now())
