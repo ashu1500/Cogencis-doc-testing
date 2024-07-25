@@ -363,11 +363,11 @@ def generate_chunk_summary(theme,chunk_text):
     ''' Generate final chunk summary'''
     try:
         keywords_list= keywords_theme_extraction(theme,chunk_text,llm_model)
-        logging.debug("keywords generated")
-        logging.debug(datetime.datetime.now())
+        print("keywords generated")
+        print(datetime.datetime.now())
         chunk_summary = summary_generation_perchunk(keywords_list, chunk_text, llm_model)
-        logging.debug("Chunk theme summary generated")
-        logging.debug(datetime.datetime.now())
+        print("Chunk theme summary generated")
+        print(datetime.datetime.now())
         return chunk_summary
 
     except Exception as ex:
