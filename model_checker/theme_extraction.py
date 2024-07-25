@@ -198,7 +198,7 @@ def get_relevant_chunks_per_theme(e5_model,theme,chunk_embedding_dict):
         relevant_chunk_list=[]
         theme_embedding= generate_embeddings(e5_model,theme)
         for chunk_text,chunk_embedding in chunk_embedding_dict.items():
-            if cos_sim(theme_embedding,chunk_embedding).item()>0.76:
+            if cos_sim(theme_embedding,chunk_embedding).item()>0.77:
                 relevant_chunk_list.append(chunk_text)
         return relevant_chunk_list
     except Exception as e:
