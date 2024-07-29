@@ -138,7 +138,8 @@ def get_final_transcript_themes(llm,input_list):
         top_themes= extract_top_themes(actual_chunk_headers,llm)
         generated_themes=extract_headers_from_important_points(top_themes.generations[0][0].text)
         fixed_themes=["Financial Performance","Merger and Acquisition","Risks and Challenges","Market Trends and Outlook","Competitive Positioning"]
-        final_themes= set(fixed_themes+generated_themes)
+        combined_themes= set(fixed_themes+generated_themes)
+        final_themes= set(list(map(lambda x: str(x).capitalize(), combined_themes)))
         return final_themes
         
     except Exception as e:
