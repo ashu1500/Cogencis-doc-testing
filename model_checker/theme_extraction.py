@@ -397,7 +397,7 @@ def generate_theme_summary(theme, chunk_data):
         combined_summary+=result
         actual_list= [x.strip() for x in combined_summary.split('\n')]
         joined_summary= "".join(actual_list)
-        summary_list= textwrap.wrap(joined_summary,13000)
+        summary_list= textwrap.wrap(joined_summary,12000)
         output_summary=""
         for summary in summary_list:
             generated_summary= get_final_summary(summary,llm_model)
