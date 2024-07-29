@@ -432,6 +432,7 @@ def get_document_theme_summary(chunk_dictionary):
 def remove_similar_summary_points(embedding_model,theme_summary):
     ''' Check similarity between summary points'''
     try:
+        print("Removing similar summary points")
         summary_points= theme_summary.strip().split("\n")
         summary_embeddings= [generate_embeddings(embedding_model,summary) for summary in summary_points]
         for i in range(len(summary_embeddings)):
@@ -448,6 +449,7 @@ def remove_similar_summary_points(embedding_model,theme_summary):
 def compare_two_themes(embedding_model,theme1_summary,theme2_summary):
     ''' Check similarity between two themes'''
     try:
+        print("Comparing two themes")
         similar_pairs=[]
         theme1_embeddings=[generate_embeddings(embedding_model,summary_point) for summary_point in theme1_summary]
         theme2_embeddings=[generate_embeddings(embedding_model,summary_point) for summary_point in theme2_summary]
@@ -485,7 +487,9 @@ def get_refined_document_summary(chunk_dictionary,embedding_model):
     try:
         final_doc_summary={}
         document_summary= get_document_theme_summary(chunk_dictionary)
+        print("Complete document summary generated")
         refined_summary= check_similar_theme_summaries(embedding_model,document_summary)
+        print("Refined summary generated")
         for theme,summary in refined_summary:
             final_doc_summary[theme]= remove_similar_summary_points(embedding_model,summary)
         
