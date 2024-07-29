@@ -484,7 +484,7 @@ def get_refined_document_summary(chunk_dictionary,embedding_model):
     ''' Apply cosine similarity to remove similar data'''
     try:
         final_doc_summary={}
-        document_summary= get_document_theme_summary(chunk_dictionary,llm_model)
+        document_summary= get_document_theme_summary(chunk_dictionary)
         refined_summary= check_similar_theme_summaries(embedding_model,document_summary)
         for theme,summary in refined_summary:
             final_doc_summary[theme]= remove_similar_summary_points(embedding_model,summary)
