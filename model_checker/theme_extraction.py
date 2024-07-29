@@ -137,9 +137,9 @@ def get_final_transcript_themes(llm,input_list):
         ls=[actual_chunk_headers.append(x) for x in all_chunk_header if x not in actual_chunk_headers]
         top_themes= extract_top_themes(actual_chunk_headers,llm)
         generated_themes=extract_headers_from_important_points(top_themes.generations[0][0].text)
-        fixed_themes=["Financial Performance","Merger and Acquisition","Risks and Challenges","Market Trends and Outlook","Competitive Positioning"]
+        fixed_themes=["Financial performance","Merger and acquisition","Risks and challenges","Market trends and outlook","Competitive positioning","ESG"]
         combined_themes= set(fixed_themes+generated_themes)
-        final_themes= set(list(map(lambda x: str(x).capitalize(), combined_themes)))
+        final_themes= set(list(map(lambda x: str(x).title(), combined_themes)))
         return final_themes
         
     except Exception as e:
@@ -429,6 +429,71 @@ def get_document_theme_summary(chunk_dictionary):
         logging.error(e)
         raise e
 
+def remove_similar_summary_points(embedding_model,theme_summary):
+    ''' Check similarity between summary points'''
+    try:
+        summary_points= theme_summary.strip().split("\n")
+        summary_embeddings= [generate_embeddings(embedding_model,summary) for summary in summary_points]
+        for i in range(len(summary_embeddings)):
+            for j in range(i+1,len(summary_embeddings)):
+                if (cos_sim(summary_embeddings[i],summary_embeddings[j]).item())>0.89:
+                    summary_points.remove(summary_points[j])
+        final_theme_summary= "\n".join(summary_points)
+        return final_theme_summary
+    except Exception as ex:
+        print(ex)
+        raise ex
+
+
+def compare_two_themes(embedding_model,theme1_summary,theme2_summary):
+    ''' Check similarity between two themes'''
+    try:
+        similar_pairs=[]
+        theme1_embeddings=[generate_embeddings(embedding_model,summary_point) for summary_point in theme1_summary]
+        theme2_embeddings=[generate_embeddings(embedding_model,summary_point) for summary_point in theme2_summary]
+        for i in range(len(theme1_embeddings)):
+            for j in range(len(theme2_embeddings)):
+                if (cos_sim(theme1_embeddings[i],theme2_embeddings[j])).item()>0.9:
+                    similar_pairs.append((theme1_summary[i],theme2_summary[j]))
+        if len(similar_pairs)>3:
+            return True
+        else:
+            return False
+    except Exception as ex:
+        print(ex)
+        raise ex
+
+
+def check_similar_theme_summaries(embedding_model,theme_based_summary):
+    ''' Get final theme based summaries'''
+    try:
+        themes_summary_list= list(theme_based_summary.values())
+        themes_list= list(theme_based_summary.keys())
+        for x in range (len(themes_summary_list)):
+            for y in range(x+1,len(themes_summary_list)):
+                if compare_two_themes(embedding_model,themes_summary_list[x],themes_summary_list[y]):
+                    del theme_based_summary[themes_list[y]]
+
+        return theme_based_summary
+
+    except Exception as ex:
+        print(ex)
+        raise ex
+
+def get_refined_document_summary(chunk_dictionary,embedding_model):
+    ''' Apply cosine similarity to remove similar data'''
+    try:
+        final_doc_summary={}
+        document_summary= get_document_theme_summary(chunk_dictionary,llm_model)
+        refined_summary= check_similar_theme_summaries(embedding_model,document_summary)
+        for theme,summary in refined_summary:
+            final_doc_summary[theme]= remove_similar_summary_points(embedding_model,summary)
+        
+        return final_doc_summary
+    except Exception as ex:
+        print(ex)
+        raise ex
+
 
 
 def get_final_output(chunk_data):
@@ -450,7 +515,7 @@ def get_final_output(chunk_data):
         chunk_embedding_pair[chunk_text]= chunk_embedding
     relevant_chunks_dict= filter_relevant_chunks(e5_embedding_model,transcript_themes,chunk_embedding_pair)
     
-    theme_based_summary= get_document_theme_summary(relevant_chunks_dict)
+    theme_based_summary= get_refined_document_summary(relevant_chunks_dict,e5_embedding_model)
     print("Final theme based summary generated")
     # print(theme_based_summary)
     return theme_based_summary
