@@ -493,7 +493,7 @@ def get_refined_document_summary(chunk_dictionary,embedding_model):
         print("Complete document summary generated")
         refined_summary= check_similar_theme_summaries(embedding_model,document_summary)
         print("Refined summary generated")
-        for theme,summary in refined_summary:
+        for theme,summary in refined_summary.items():
             final_doc_summary[theme]= remove_similar_summary_points(embedding_model,summary)
         
         return final_doc_summary
