@@ -334,12 +334,16 @@ def get_final_summary(text, llm):
         logging.error("Error generating final summary: %s", e)
         raise e
 
-def remove_headers(text):
-    """Remove headers and generate as bullet points"""
+def remove_unwanted_headers(text):
+    """Remove numbered headers and generate as bullet points"""
     try:
         lines = text.strip().split("\n")
         processed_lines = []
         for line in lines:
+            line= line.strip()
+            if not line:
+                continue
+            line = re.sub(r'\d+\. ', '\n• ', line).strip()
             if line.startswith("•"):
                 colon_pos = line.find(":")
                 if colon_pos != -1:
@@ -347,18 +351,14 @@ def remove_headers(text):
                 else:
                     processed_line = line.strip()
                     processed_lines.append(processed_line)
-        
-            elif line!='' and line[0].isdigit():
-                line= line.replace(line[0],"• ",1)
-                line= line.replace('.','',1)
-                processed_lines.append(line.strip())
-            
+    
             else:
                 processed_lines.append(line.strip())
         processed_text = "\n".join(processed_lines)
-        return processed_text
+        final_processed_text= re.sub(r'\n\n', '\n', processed_text)
+        return final_processed_text
     except Exception as e:
-        logging.error("Error removing headers: %s", e)
+        print("Error removing headers: %s", e)
         raise e
     
 def generate_chunk_summary(theme,chunk_text):
@@ -404,9 +404,9 @@ def generate_theme_summary(theme, chunk_data):
             output_summary+=generated_summary
         if len(output_summary.strip().split("\n"))>10:
             concised_summary= get_final_summary(output_summary,llm_model)
-            final_summary= remove_headers(concised_summary)
+            final_summary= remove_unwanted_headers(concised_summary)
         else:
-            final_summary= remove_headers(output_summary)
+            final_summary= remove_unwanted_headers(output_summary)
         return final_summary
     except Exception as e:
         logging.error(e)
