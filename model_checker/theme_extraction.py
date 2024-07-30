@@ -424,7 +424,8 @@ def get_document_theme_summary(chunk_dictionary):
                 print("Theme summary generated")
             else:
                 continue
-        return theme_based_summary
+        final_theme_based_summary = {k: v for k, v in theme_based_summary.items() if v.strip() not in (None, '')}
+        return final_theme_based_summary
     except Exception as e:
         logging.error(e)
         raise e
@@ -471,12 +472,12 @@ def check_similar_theme_summaries(embedding_model,theme_based_summary):
     try:
         themes_summary_list= list(theme_based_summary.values())
         themes_list= list(theme_based_summary.keys())
-        for x in range (len(themes_summary_list)):
-            for y in range(x+1,len(themes_summary_list)):
+        for x in range (len(theme_based_summary)):
+            for y in range(x+1,len(theme_based_summary)):
                 if compare_two_themes(embedding_model,themes_summary_list[x],themes_summary_list[y]):
-                    del theme_based_summary[themes_list[y]]
-
-        return theme_based_summary
+                    theme_based_summary[themes_list[y]]= " "
+        final_theme_based_summary = {k: v for k, v in theme_based_summary.items() if v.strip() not in (None, '')}
+        return final_theme_based_summary
 
     except Exception as ex:
         print(ex)
