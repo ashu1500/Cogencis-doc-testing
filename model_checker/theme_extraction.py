@@ -366,7 +366,8 @@ def remove_unwanted_headers(text):
 def split_summary_into_chunks(summary, max_chunk_size):
     ''' Split the generated summary into equal parts'''
     try:
-        lines = summary.split('\n')
+        summary_lines = summary.split('\n')
+        lines= [x.strip() for x in summary_lines]
         chunks = []
         current_chunk = ""
         for line in lines:
@@ -386,8 +387,6 @@ def split_summary_into_chunks(summary, max_chunk_size):
     
     except Exception as ex:
         print(ex)
-
-
 
 def generate_chunk_summary(theme,chunk_text):
     ''' Generate final chunk summary'''
@@ -423,9 +422,7 @@ def generate_theme_summary(theme, chunk_data):
         combined_summary= ""
         result= process_files_in_parallel(chunk_data,theme)
         combined_summary+=result
-        actual_list= [x.strip() for x in combined_summary.split('\n')]
-        joined_summary= "".join(actual_list)
-        summary_list= split_summary_into_chunks(joined_summary,13000)
+        summary_list= split_summary_into_chunks(combined_summary,13000)
         output_summary=""
         for summary in summary_list:
             generated_summary= get_final_summary(summary,llm_model)
