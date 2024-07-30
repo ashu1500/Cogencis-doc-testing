@@ -362,6 +362,33 @@ def remove_unwanted_headers(text):
         print("Error removing headers: %s", e)
         raise e
     
+
+def split_summary_into_chunks(summary, max_chunk_size):
+    ''' Split the generated summary into equal parts'''
+    try:
+        lines = summary.split('\n')
+        chunks = []
+        current_chunk = ""
+        for line in lines:
+            if len(current_chunk) + len(line) + 1 > max_chunk_size:
+                chunks.append(current_chunk)
+                current_chunk = line
+            else:
+                if current_chunk:
+                    current_chunk += '\n' + line
+                else:
+                    current_chunk = line
+    
+        if current_chunk:
+            chunks.append(current_chunk)
+    
+        return chunks
+    
+    except Exception as ex:
+        print(ex)
+
+
+
 def generate_chunk_summary(theme,chunk_text):
     ''' Generate final chunk summary'''
     try:
@@ -398,7 +425,7 @@ def generate_theme_summary(theme, chunk_data):
         combined_summary+=result
         actual_list= [x.strip() for x in combined_summary.split('\n')]
         joined_summary= "".join(actual_list)
-        summary_list= textwrap.wrap(joined_summary,12000)
+        summary_list= split_summary_into_chunks(joined_summary,13000)
         output_summary=""
         for summary in summary_list:
             generated_summary= get_final_summary(summary,llm_model)
@@ -506,6 +533,7 @@ def get_refined_document_summary(chunk_dictionary,embedding_model):
 
 def get_final_output(chunk_data):
     print(datetime.datetime.now())
+    np.random.seed(42)
     transcript_themes= get_final_transcript_themes(llm_model,chunk_data)
     print("all themes generated")
     print(datetime.datetime.now())
