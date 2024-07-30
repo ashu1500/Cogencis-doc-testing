@@ -452,8 +452,10 @@ def compare_two_themes(embedding_model,theme1_summary,theme2_summary):
     try:
         print("Comparing two themes")
         similar_pairs=[]
-        theme1_embeddings=[generate_embeddings(embedding_model,summary_point) for summary_point in theme1_summary]
-        theme2_embeddings=[generate_embeddings(embedding_model,summary_point) for summary_point in theme2_summary]
+        theme1_summary_points= theme1_summary.strip().split("\n")
+        theme2_summary_points= theme2_summary.strip().split("\n")
+        theme1_embeddings=[generate_embeddings(embedding_model,summary_point) for summary_point in theme1_summary_points]
+        theme2_embeddings=[generate_embeddings(embedding_model,summary_point) for summary_point in theme2_summary_points]
         for i in range(len(theme1_embeddings)):
             for j in range(len(theme2_embeddings)):
                 if (cos_sim(theme1_embeddings[i],theme2_embeddings[j])).item()>0.9:
