@@ -80,7 +80,7 @@ def extract_headers_from_themes(output_text):
         raise e
 
 def extract_top_themes(theme_text,llm):
-    ''' Identify top 10 themes from the given list'''
+    ''' Identify top 15 themes from the given list'''
     try:
         template = """<s>[INST] <<SYS>>
         You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe.
@@ -107,7 +107,7 @@ def extract_headers_from_important_points(output_text):
         themes_lines = [line.strip() for line in themes_lines[1:] if line.strip()]
         headers_list = []
         for theme_line in themes_lines:
-            if theme_line.strip().startswith(tuple(f"{i}." for i in range(1, 11))):
+            if theme_line.strip().startswith(tuple(f"{i}." for i in range(1, 16))):
                 if ":" in theme_line:
                     header = theme_line.split(":")[1].strip()
                     headers_list.append(header)
