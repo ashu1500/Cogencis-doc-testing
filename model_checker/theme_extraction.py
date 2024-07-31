@@ -516,12 +516,12 @@ def get_refined_document_summary(chunk_dictionary,embedding_model):
         # final_doc_summary={}
         document_summary= get_document_theme_summary(chunk_dictionary)
         print("Complete document summary generated")
-        refined_summary= check_similar_theme_summaries(embedding_model,document_summary)
-        print("Refined summary generated")
+        # refined_summary= check_similar_theme_summaries(embedding_model,document_summary)
+        # print("Refined summary generated")
         # for theme,summary in refined_summary.items():
         #     final_doc_summary[theme]= remove_similar_summary_points(embedding_model,summary)
         
-        return refined_summary
+        return document_summary
     except Exception as ex:
         print(ex)
         raise ex
