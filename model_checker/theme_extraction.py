@@ -422,7 +422,7 @@ def generate_theme_summary(theme, chunk_data):
         combined_summary= ""
         result= process_files_in_parallel(chunk_data,theme)
         combined_summary+=result
-        summary_list= split_summary_into_chunks(combined_summary,13000)
+        summary_list= split_summary_into_chunks(combined_summary,12000)
         output_summary=""
         for summary in summary_list:
             generated_summary= get_final_summary(summary,llm_model)
