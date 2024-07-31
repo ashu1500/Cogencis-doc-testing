@@ -587,5 +587,4 @@ def main():
     print("Final summary")
     print(final_summary)
         
-
-    main()
+main()
