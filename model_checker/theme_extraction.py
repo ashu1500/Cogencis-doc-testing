@@ -455,17 +455,22 @@ def get_document_theme_summary(chunk_dictionary):
         logging.error(e)
         raise e
 
+
 def remove_similar_summary_points(embedding_model,theme_summary):
     ''' Check similarity between summary points'''
     try:
         print("Removing similar summary points")
+        indices_to_remove=set()
         summary_points= theme_summary.strip().split("\n")
+        print("Summary length: ",len(summary_points))
         summary_embeddings= [generate_embeddings(embedding_model,summary) for summary in summary_points]
         for i in range(len(summary_embeddings)):
             for j in range(i+1,len(summary_embeddings)):
                 if (cos_sim(summary_embeddings[i],summary_embeddings[j]).item())>0.89:
-                    summary_points.remove(summary_points[j])
-        final_theme_summary= "\n".join(summary_points)
+                  indices_to_remove.add(j)
+        filtered_summary_points = [point for idx, point in enumerate(summary_points) if idx not in indices_to_remove]
+        print("Summary length: ",len(set(filtered_summary_points)))
+        final_theme_summary= "\n".join(set(filtered_summary_points))
         return final_theme_summary
     except Exception as ex:
         print(ex)
