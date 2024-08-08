@@ -244,7 +244,7 @@ def main():
         'Upgrade/Maintain': ['We are maintaining this 40 million tonne for this year and for the next year 65 to 75 million tonne depending upon the timing of various approvals.']
     }
 
-    final_summary= generate_final_discussion_summary(final_discussion_dict,llm_model)
+    final_summary= generate_final_discussion_summary(final_answers_dict,llm_model)
     print(final_summary)
 
 main()
