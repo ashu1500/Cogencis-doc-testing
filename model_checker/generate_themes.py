@@ -155,8 +155,7 @@ def generate_theme_summary(theme,chunk_list,llm):
         theme_summary=""
         for chunk in chunk_list:
             chunk_summary= summary_generation_perchunk(theme,chunk,llm)
-            if len(chunk_summary.split('\n'))>5:
-                chunk_summary_list= chunk_summary.split('\n')[:5]
+            chunk_summary_list= chunk_summary.split('\n')[:5]
             chunk_summary_list = list(map(str.strip, chunk_summary_list))
             actual_chunk_summary= "\n".join(chunk_summary_list)
             processed_summary= remove_unwanted_headers(actual_chunk_summary)
