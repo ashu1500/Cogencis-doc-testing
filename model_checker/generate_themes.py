@@ -106,7 +106,7 @@ def main():
         'Hi Sir and thanks for the opportunity. Just one question. Most of them have been answered. On the MDO front we have given guidance of around 40 million tonnes in this year and around 75 odd tonnes next year so can you just update on that whether are we maintaining it or upgrading it?'
     ]
     chunk_headers_list=[]
-    for items in adani_questions_list:
+    for items in adani_discussion_points:
         print("Theme generation")
         chunk_txt= theme_extraction_per_chunk(items,llm_model)
         chunk_header= extract_headers_from_themes(chunk_txt.generations[0][0].text)
