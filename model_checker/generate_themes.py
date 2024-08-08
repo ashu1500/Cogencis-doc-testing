@@ -140,7 +140,7 @@ def generate_final_discussion_summary(chunk_theme_dict,llm):
         for theme,chunk_data in chunk_theme_dict.items():
             theme_summary= generate_theme_summary(theme,chunk_data,llm)
             theme_summary_dict[theme]= theme_summary
-        return theme_summary
+        return theme_summary_dict
 
     except Exception as ex:
         print(ex)
