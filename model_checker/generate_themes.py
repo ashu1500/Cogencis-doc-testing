@@ -124,11 +124,17 @@ def summary_generation_perchunk(theme, text, llm):
 def generate_theme_summary(theme,chunk_list,llm):
     try:
         print("Entered theme summary generation")
-        summary_list=[]
+        theme_summary=""
         for chunk in chunk_list:
             chunk_summary= summary_generation_perchunk(theme,chunk,llm)
-            summary_list.append(chunk_summary)
-        return summary_list
+            if len(chunk_summary.split('\n'))>5:
+                chunk_summary_list= chunk_summary.split('\n')[:5]
+            chunk_summary_list = list(map(str.strip, chunk_summary_list))
+            actual_chunk_summary= "\n".join(chunk_summary_list)
+            theme_summary+="\n"
+            theme_summary+= actual_chunk_summary
+        
+        return theme_summary
     except Exception as ex:
         print(ex)
 
