@@ -123,6 +123,7 @@ def summary_generation_perchunk(theme, text, llm):
 
 def generate_theme_summary(theme,chunk_list,llm):
     try:
+        print("Entered theme summary generation")
         summary_list=[]
         for chunk in chunk_list:
             chunk_summary= summary_generation_perchunk(theme,chunk,llm)
@@ -134,8 +135,9 @@ def generate_theme_summary(theme,chunk_list,llm):
 
 def generate_final_discussion_summary(chunk_theme_dict,llm):
     try:
+        print("Entered final summary generation")
         theme_summary_dict={}
-        for theme,chunk_data in chunk_theme_dict:
+        for theme,chunk_data in chunk_theme_dict.items():
             theme_summary= generate_theme_summary(theme,chunk_data,llm)
             theme_summary_dict[theme]= theme_summary
         return theme_summary
