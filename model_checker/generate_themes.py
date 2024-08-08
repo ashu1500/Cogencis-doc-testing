@@ -104,9 +104,9 @@ def summary_generation_perchunk(theme, text, llm):
         print("Entering summary generation per chunk")
         template = f"""
             Generate a summary that includes both factual and inferential points, building a coherent narrative around the {theme}.
-            Your summary should consist of exactly 5 bullet points, each point having at least 20 words long.Include a mix of direct observations and inferences drawn from the {text}.
-            Build a story that flows logically from one point to the next.Prioritize information relevant to a financial equity analyst.Avoid using question formats or explicit headers.
-            Please don't add any extraa comments after the summary around assistance.
+            Your summary should consist of exactly 5 summarized bullet points, each point having at least 20 words long.Include a mix of direct observations and inferences drawn from the {text}.
+            Prioritize information relevant to a financial equity analyst.Avoid using question formats or explicit headers.
+            Please don't add any headers for the summary and avoid extraa comments after the summary.
 
             SUMMARY:
             """
