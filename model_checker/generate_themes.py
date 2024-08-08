@@ -120,6 +120,34 @@ def summary_generation_perchunk(theme, text, llm):
     finally:
         print("Exiting summary generation per chunk")
 
+def remove_unwanted_headers(text):
+    """Remove numbered headers and generate as bullet points"""
+    try:
+        lines = text.strip().split("\n")
+        processed_lines = []
+        for line in lines:
+            line= line.strip()
+            if not line:
+                continue
+            line = re.sub(r'\d+\. ', '\n• ', line).strip()
+            if line.startswith("•"):
+                colon_pos = line.find(":")
+                if colon_pos != -1:
+                    processed_line = "• " + line[colon_pos + 1:].strip()
+                    processed_lines.append(processed_line)
+                else:
+                    processed_line = line.strip()
+                    processed_lines.append(processed_line)
+    
+            else:
+                processed_lines.append(line.strip())
+        processed_text = "\n".join(processed_lines)
+        final_processed_text= re.sub(r'\n\n', '\n', processed_text)
+        return final_processed_text
+    except Exception as e:
+        print("Error removing headers: %s", e)
+        raise e
+
 
 def generate_theme_summary(theme,chunk_list,llm):
     try:
@@ -131,8 +159,9 @@ def generate_theme_summary(theme,chunk_list,llm):
                 chunk_summary_list= chunk_summary.split('\n')[:5]
             chunk_summary_list = list(map(str.strip, chunk_summary_list))
             actual_chunk_summary= "\n".join(chunk_summary_list)
+            processed_summary= remove_unwanted_headers(actual_chunk_summary)
             theme_summary+="\n"
-            theme_summary+= actual_chunk_summary
+            theme_summary+= processed_summary
         
         return theme_summary
     except Exception as ex:
