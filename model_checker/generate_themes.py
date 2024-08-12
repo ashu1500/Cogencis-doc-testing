@@ -344,7 +344,7 @@ def main():
         print("Theme generation")
         chunk_txt= question_theme_extraction_per_chunk(items,llm_model)
         chunk_header= extract_headers_from_themes(chunk_txt.generations[0][0].text)
-        chunk_headers_list.append(chunk_header)
+        chunk_headers_list.append(chunk_txt)
     print(chunk_headers_list)
     # e5_embedding_model = SentenceTransformer('intfloat/e5-large')
     # final_discussion_dict={
