@@ -61,7 +61,7 @@ def theme_extraction_per_chunk(chunk_text, llm):
 def extract_headers_from_themes(output_text):
     ''' Get headers list for themes'''
     try:
-        start_index = output_text.find("key header:")
+        start_index = output_text.find("key headers:")
         themes_section = output_text[start_index:]
         themes_lines = themes_section.split("\n")
         themes_lines = [line.strip() for line in themes_lines[1:] if line.strip()]
@@ -341,7 +341,7 @@ def main():
     np.random.seed(42)
     for items in adani_questions_list:
         print("Theme generation")
-        chunk_txt= question_theme_extraction_per_chunk(items,llm_model)
+        chunk_txt= theme_extraction_per_chunk(items,llm_model)
         chunk_header= extract_headers_from_themes(chunk_txt.generations[0][0].text)
         chunk_headers_list.append(chunk_header)
     print(chunk_headers_list)
