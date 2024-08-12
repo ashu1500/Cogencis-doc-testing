@@ -61,7 +61,7 @@ def theme_extraction_per_chunk(chunk_text, llm):
 def extract_headers_from_themes(output_text):
     ''' Get headers list for themes'''
     try:
-        start_index = output_text.find("key headers:")
+        start_index = output_text.find("key header:")
         themes_section = output_text[start_index:]
         themes_lines = themes_section.split("\n")
         themes_lines = [line.strip() for line in themes_lines[1:] if line.strip()]
@@ -300,9 +300,7 @@ def question_theme_extraction_per_chunk(chunk_text, llm):
         Please ensure that your responses are socially unbiased and positive in nature.
         <</SYS>>
         Generate exactly one concise key header (3-4 words) that captures the most important point of the following financial information. Provide only the header with no explanation:
-
-       {chunk_text}
-
+        {chunk_text}
         key header:
         """
 
