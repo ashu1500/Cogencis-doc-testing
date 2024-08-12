@@ -41,11 +41,10 @@ def theme_extraction_per_chunk(chunk_text, llm):
     ''' Extract themes for each chunk'''
     try:
         template = """<s>[INST] <<SYS>>
-        You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe.
-        Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content.
-        Please ensure that your responses are socially unbiased and positive in nature.
+        You are a helpful assistant. Generate concise and relevant key headers based on the financial information in the text.
+        Avoid any harmful, unethical, or biased content.
         <</SYS>>
-        Generate only 2 most important key headers with clear context relevant for financial information in maximum 3-4 words from the given text.Please do not include any explaination for the key headers.
+        Generate 2 key headers (3-4 words each) from the following text. No explanations needed.
         text: {text}
         key headers:
         """
@@ -299,7 +298,7 @@ def question_theme_extraction_per_chunk(chunk_text, llm):
         Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content.
         Please ensure that your responses are socially unbiased and positive in nature.
         <</SYS>>
-        Generate exactly one concise key header (3-4 words) that captures the most important point of the following financial information. Provide only the header with no explanation:
+        Generate exactly one concise key header (3-4 words) that captures the most important point of the following financial information. Provide only the header with no explanation and header should not be a question:
         {chunk_text}
         key header:
         """
@@ -310,8 +309,52 @@ def question_theme_extraction_per_chunk(chunk_text, llm):
     except Exception as e:
         print(e)
         raise e
+    
+def extract_headers_from_question_themes(output_text):
+    ''' Get headers list for themes'''
+    try:
+        start_index = output_text.find("key header:")
+        themes_section = output_text[start_index:]
+        themes_lines = themes_section.split("\n")
+        themes_lines = [line.strip() for line in themes_lines[1:] if line.strip()]
+        headers_list = []
+        theme_line= themes_lines[0]
+        if theme_line.strip().startswith(tuple(f"{i}." for i in range(1, 11))):
+          if ":" in theme_line:
+            header = theme_line.split(":")[1].strip()
+            headers_list.append(header)
+          else:
+            header = theme_line.split(".")[1].strip()
+            headers_list.append(header)
+        else:
+          headers_list.append(theme_line)
 
+        return headers_list
+    except Exception as e:
+        print(e)
+        raise e
 
+def get_final_transcript_themes(llm,input_list):
+    '''Get final themes for the transcript document'''
+    try:
+        chunk_headers_list=[]
+        all_chunk_header=[]
+        actual_chunk_headers=[]
+        for items in input_list:
+            print("Theme generation")
+            chunk_txt= theme_extraction_per_chunk(items,llm)
+            chunk_header= extract_headers_from_themes(chunk_txt.generations[0][0].text)
+            chunk_headers_list.append(chunk_header)
+        for header in chunk_headers_list:
+            all_chunk_header+=header
+        print("All themes generated")
+        ls=[actual_chunk_headers.append(x) for x in all_chunk_header if x not in actual_chunk_headers]
+        final_themes= set(list(map(lambda x: str(x).title(), actual_chunk_headers)))
+        return final_themes
+        
+    except Exception as e:
+        print(e)
+        raise e
 
 
 
@@ -344,9 +387,12 @@ def main():
     for items in adani_questions_list:
         print("Theme generation")
         chunk_txt= question_theme_extraction_per_chunk(items,llm_model)
-        chunk_header= extract_headers_from_themes(chunk_txt.generations[0][0].text)
-        chunk_headers_list.append(chunk_txt.generations[0][0].text)
+        chunk_header= extract_headers_from_question_themes(chunk_txt.generations[0][0].text)
+        chunk_headers_list.append(chunk_header)
     print(chunk_headers_list)
+    print("Generating discussion themes")
+    discussion_themes= get_final_transcript_themes(llm_model,adani_discussion_points)
+    print(discussion_themes)
     # e5_embedding_model = SentenceTransformer('intfloat/e5-large')
     # final_discussion_dict={
     #     'Portfolio of Businesses': ['Thank you so much. Hi Good Morning all. This is Robbie Singh, CFO of Adani Enterprise. I welcome you all to the earnings call to discuss Q1 FY23 results. AEL continues to create value for its shareholders as a successful incubator for the past two-and-a-half decades. This incubation model has created leaders in the respective sectors like Adani Ports, Adani Transmission, Adani Green Energy, Adani Total Gas, and Adani Wilmar and has delivered returns at a compound annual growth rate of 36% to shareholders. AEL holds a portfolio of businesses - both established and incubating - which are spread across different verticals in energy and utility, transport and logistics, direct to consumer and primary industries. Within primary industries it has established businesses of mining services and integrated resource management along with the developing vertical of metals. As our established business continue to sustain long term growth, we are making significant progress in our attractive incubation pipeline comprising of energy and utility which is Adani New Industries - it is a green hydrogen ecosystem and full service data center business AdaniConneX. In the transport and logistics we have Adani Airport Holdings and Adani Road Transport Limited businesses which will further accelerate value creation for Adani Enterprise shareholders. We are happy to inform that AEL has completed primary equity transaction of Rs.7700 Crores with Abu Dhabi based International Holding Company for 3.5% stake. This validates our strong capital management philosophy of equity funded growth and conservative leverage targets.','Thanks Robbie. Good Morning to all. In fact as far as the mining services business is concerned Adani Enterprise Limited is the pioneer of MDO concept in India with an integrated business model that spans across developing mines as well as the entire upstream and downstream activities. It provides the full service range - right from seeking various approvals, land acquisition, R&R, developing required infrastructure, mining, beneficiation and transportation to designated consumption plants. The company is also MDO for nine coal blocks and two iron ore blocks with combined peak capacity of 120 MMT per annum. These 11 projects are located in the state of Chhattisgarh, MP and Odisha. The mining production volume increased by 72% to 8.1 MMT on year-on-year basis and further dispatch increased by 58% to 7.2 MMT on year-on- year basis. The revenue from mining services increased by 18% to Rs. 677 Crores and EBITDA stood at Rs. 268 Crores versus Rs. 307 Cores on year-on-year basis on account of high operating costs. As Robbie told about copper business apart from financial closure, operational activities are progressing well and it is as per schedule. Additionally, we have also received PLI scheme approval for copper tube value added scheme for our copper business. As far as the IRM business is concerned, in terms of IRM business we have continued to develop business relationship withdiversified customers across various end-user industries. We retained number one player position in India and having the endeavor to maintain this position going forward. The volume in Q1 FY23 increased by 52% to 26.7 MMT, the EBITDA has increased by 72% to Rs.950 Crores on account of higher volumes. Thank you.'],
