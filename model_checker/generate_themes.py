@@ -60,7 +60,7 @@ def theme_extraction_per_chunk(chunk_text, llm):
 def extract_headers_from_themes(output_text):
     ''' Get headers list for themes'''
     try:
-        start_index = output_text.find("key header:")
+        start_index = output_text.find("key headers:")
         themes_section = output_text[start_index:]
         themes_lines = themes_section.split("\n")
         themes_lines = [line.strip() for line in themes_lines[1:] if line.strip()]
@@ -97,13 +97,13 @@ def extract_summary_section_perchunk(text):
         raise e
 
 
-def summary_generation_perchunk(theme, text, llm):
+def summary_generation_perchunk(theme, text, llm,num_points):
     """Generate summary for each chunk based on the keywords."""
     try:
         print("Entering summary generation per chunk")
         template = f"""
             Generate a summary that includes both factual and inferential points, building a coherent narrative around the {theme}.
-            Your summary should consist of exactly 5 summarized bullet points, each point having at least 20 words long.Include a mix of direct observations and inferences drawn from the {text}.
+            Your summary should consist of exactly {num_points} summarized bullet points, each point having at least 20 words long.Include a mix of direct observations and inferences drawn from the {text}.
             Prioritize information relevant to a financial equity analyst.Avoid using question formats or explicit headers.
             Please don't add any headers for the summary and avoid extraa comments after the summary.
 
