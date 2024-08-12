@@ -339,6 +339,7 @@ def main():
         'Hi Sir and thanks for the opportunity. Just one question. Most of them have been answered. On the MDO front we have given guidance of around 40 million tonnes in this year and around 75 odd tonnes next year so can you just update on that whether are we maintaining it or upgrading it?'
     ]
     chunk_headers_list=[]
+    np.random.seed(42)
     for items in adani_questions_list:
         print("Theme generation")
         chunk_txt= question_theme_extraction_per_chunk(items,llm_model)
