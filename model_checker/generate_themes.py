@@ -167,17 +167,131 @@ def generate_theme_summary(theme,chunk_list,llm):
         print(ex)
 
 
-def generate_final_discussion_summary(chunk_theme_dict,llm):
+def get_document_theme_summary(chunk_dictionary,llm):
+    '''Get theme-based summary of document'''
     try:
-        print("Entered final summary generation")
-        theme_summary_dict={}
-        for theme,chunk_data in chunk_theme_dict.items():
-            theme_summary= generate_theme_summary(theme,chunk_data,llm)
-            theme_summary_dict[theme]= theme_summary
-        return theme_summary_dict
+        theme_based_summary={}
+        summary_generation_time={}
+        for theme,chunk in chunk_dictionary.items():
+            if chunk:
+                print("Theme summary started")
+                theme_based_summary[theme]= generate_theme_summary(theme,chunk,llm)
+                print("Theme summary generated")
+                summary_generation_time[theme]= str(datetime.datetime.now().time())
+                print(datetime.datetime.now())
+            else:
+                continue
+        final_theme_based_summary = {k: v for k, v in theme_based_summary.items() if v.strip() not in (None, '')}
+        return final_theme_based_summary,summary_generation_time
+    except Exception as e:
+        print(e)
+        raise e
+
+def generate_embeddings(e5_model,chunk_text):
+    ''' Generate embeddings for the document chunks'''
+    try:
+        chunk_embeddings= e5_model.encode(str(chunk_text), normalize_embeddings=True)
+        return chunk_embeddings
+    except Exception as e:
+        print(e)
+        raise e
+    
+
+def generate_final_theme_summary(embedding_model,theme,theme_summary):
+    ''' Generate final theme summary'''
+    try:
+        final_summary=[]
+        summary_points= theme_summary.strip().split("\n")
+        summary_points= [x for x in summary_points if x.strip() not in ['']]
+        theme_embedding= generate_embeddings(embedding_model,theme)
+        summary_embeddings= [generate_embeddings(embedding_model,summary) for summary in summary_points]
+        for x in range(len(summary_embeddings)):
+            if cos_sim(theme_embedding,summary_embeddings[x]).item()>0.77:
+                final_summary.append(summary_points[x])
+        final_theme_summary= "\n".join(final_summary)
+        return final_theme_summary
 
     except Exception as ex:
         print(ex)
+        raise ex
+
+
+def compare_two_themes(embedding_model,theme1_summary,theme2_summary):
+    ''' Check similarity between two themes'''
+    try:
+        similar_pairs=[]
+        theme1_summary_points= theme1_summary.strip().split("\n")
+        theme2_summary_points= theme2_summary.strip().split("\n")
+        theme1_embeddings=[generate_embeddings(embedding_model,summary_point) for summary_point in theme1_summary_points]
+        theme2_embeddings=[generate_embeddings(embedding_model,summary_point) for summary_point in theme2_summary_points]
+        for i in range(len(theme1_embeddings)):
+            for j in range(len(theme2_embeddings)):
+                if (cos_sim(theme1_embeddings[i],theme2_embeddings[j])).item()>0.9:
+                    similar_pairs.append((theme1_summary[i],theme2_summary[j]))
+        if len(similar_pairs)>3:
+            return True
+        else:
+            return False
+    except Exception as ex:
+        print(ex)
+        raise ex
+    
+def check_similar_theme_summaries(embedding_model,theme_based_summary):
+    ''' Get final theme based summaries'''
+    try:
+        themes_summary_list= list(theme_based_summary.values())
+        themes_list= list(theme_based_summary.keys())
+        for x in range (len(theme_based_summary)):
+            for y in range(x+1,len(theme_based_summary)):
+                if compare_two_themes(embedding_model,themes_summary_list[x],themes_summary_list[y]):
+                    theme_based_summary[themes_list[x]]+= theme_based_summary[themes_list[y]]
+                    theme_based_summary[themes_list[y]]= " "
+        final_theme_based_summary = {k: v for k, v in theme_based_summary.items() if v.strip() not in (None, '','•')}
+        return final_theme_based_summary
+
+    except Exception as ex:
+        print(ex)
+        raise ex
+
+def remove_similar_summary_points(embedding_model,theme_summary):
+    ''' Check similarity between summary points'''
+    try:
+        print("Removing similar summary points")
+        indices_to_remove=set()
+        summary_points= theme_summary.strip().split("\n")
+        summary_embeddings= [generate_embeddings(embedding_model,summary) for summary in summary_points]
+        for i in range(len(summary_embeddings)):
+            for j in range(i+1,len(summary_embeddings)):
+                if (cos_sim(summary_embeddings[i],summary_embeddings[j]).item())>0.89:
+                  indices_to_remove.add(j)
+        filtered_summary_points = [point for idx, point in enumerate(summary_points) if idx not in indices_to_remove]
+        final_theme_summary= "\n".join(set(filtered_summary_points))
+        return final_theme_summary
+    except Exception as ex:
+        print(ex)
+        raise ex
+
+def get_refined_document_summary(chunk_dictionary,llm,embedding_model):
+    ''' Apply cosine similarity to remove similar data'''
+    try:
+        final_doc_summary={}
+        refined_document_summary={}
+        document_summary,summary_processing_time= get_document_theme_summary(chunk_dictionary,llm)
+        for theme,summary in document_summary.items():
+            refined_document_summary[theme]= generate_final_theme_summary(embedding_model,theme,summary)
+        final_refined_summary = {k: v for k, v in refined_document_summary.items() if v.strip() not in (None, '')}
+        refined_summary= check_similar_theme_summaries(embedding_model,final_refined_summary)
+        for theme,summary in refined_summary.items():
+            final_doc_summary[theme]= remove_similar_summary_points(embedding_model,summary)
+        summary_processing_time["Final Summary Generation"]= str(datetime.datetime.now().time())
+
+        return final_doc_summary
+    except Exception as ex:
+        print(ex)
+        raise ex
+
+
+
 
 
 
@@ -213,6 +327,7 @@ def main():
     #     chunk_header= extract_headers_from_themes(chunk_txt.generations[0][0].text)
     #     chunk_headers_list.append(chunk_header)
     # print(chunk_headers_list)
+    e5_embedding_model = SentenceTransformer('intfloat/e5-large')
     final_discussion_dict={
         'Portfolio of Businesses': ['Thank you so much. Hi Good Morning all. This is Robbie Singh, CFO of Adani Enterprise. I welcome you all to the earnings call to discuss Q1 FY23 results. AEL continues to create value for its shareholders as a successful incubator for the past two-and-a-half decades. This incubation model has created leaders in the respective sectors like Adani Ports, Adani Transmission, Adani Green Energy, Adani Total Gas, and Adani Wilmar and has delivered returns at a compound annual growth rate of 36% to shareholders. AEL holds a portfolio of businesses - both established and incubating - which are spread across different verticals in energy and utility, transport and logistics, direct to consumer and primary industries. Within primary industries it has established businesses of mining services and integrated resource management along with the developing vertical of metals. As our established business continue to sustain long term growth, we are making significant progress in our attractive incubation pipeline comprising of energy and utility which is Adani New Industries - it is a green hydrogen ecosystem and full service data center business AdaniConneX. In the transport and logistics we have Adani Airport Holdings and Adani Road Transport Limited businesses which will further accelerate value creation for Adani Enterprise shareholders. We are happy to inform that AEL has completed primary equity transaction of Rs.7700 Crores with Abu Dhabi based International Holding Company for 3.5% stake. This validates our strong capital management philosophy of equity funded growth and conservative leverage targets.','Thanks Robbie. Good Morning to all. In fact as far as the mining services business is concerned Adani Enterprise Limited is the pioneer of MDO concept in India with an integrated business model that spans across developing mines as well as the entire upstream and downstream activities. It provides the full service range - right from seeking various approvals, land acquisition, R&R, developing required infrastructure, mining, beneficiation and transportation to designated consumption plants. The company is also MDO for nine coal blocks and two iron ore blocks with combined peak capacity of 120 MMT per annum. These 11 projects are located in the state of Chhattisgarh, MP and Odisha. The mining production volume increased by 72% to 8.1 MMT on year-on-year basis and further dispatch increased by 58% to 7.2 MMT on year-on- year basis. The revenue from mining services increased by 18% to Rs. 677 Crores and EBITDA stood at Rs. 268 Crores versus Rs. 307 Cores on year-on-year basis on account of high operating costs. As Robbie told about copper business apart from financial closure, operational activities are progressing well and it is as per schedule. Additionally, we have also received PLI scheme approval for copper tube value added scheme for our copper business. As far as the IRM business is concerned, in terms of IRM business we have continued to develop business relationship withdiversified customers across various end-user industries. We retained number one player position in India and having the endeavor to maintain this position going forward. The volume in Q1 FY23 increased by 52% to 26.7 MMT, the EBITDA has increased by 72% to Rs.950 Crores on account of higher volumes. Thank you.'],
         'Green Hydrogen Ecosystem': ['Let me give you a quick update of our incubating businesses. In Adani New Industry portfolio as all of you would know we have announced investment of USD 50 billion over the next decade in developing green hydrogen ecosystem. This will be housed under Adani New Industry Limited. ANIL will have three business streams — (i) Manufacturing ecosystem to include module, cell, ingots, wafers and wind turbines, electrolyzers and associated ancillary equipment ecosystem. (ii) The green hydrogen generation include development of solar and wind power plants to produce green hydrogen (iii) Downstream products depending on the usage for ammonia, urea, methanol, etc. During the quarter we announced our partnership with TotalEnergies to develop the world’s largest green H2 ecosystem. TotalEnergies will acquire 25% stake in ANIL. While thetransaction will follow customary approval process, it takes the company one step ahead to produce the world’s least expensive electrons which will drive our ability to produce the world’s least expensive green hydrogen. Following are some of the updates on development: Existing capacity of 1.5 GW at Mundra is increasing to 3.5 GW and this additional 2 GW will be completed by September this year. With this the overall capacity will reach to 3.5 GW. Wind turbine erection for the first 5.2 MW wind turbine has been completed and testing and certification is underway. We expect completion in the next 6 months. We have identified three trial sites for initial testing of electrolyzers and we expect the testing to commence by end of this calendar year or early next year. From operational point of view, module sales from our manufacturing ecosystem within ANIL stood at 264 MW. EBITDA from these sales was at Rs. 42 Crores.'],
@@ -244,7 +359,10 @@ def main():
         'Upgrade/Maintain': ['We are maintaining this 40 million tonne for this year and for the next year 65 to 75 million tonne depending upon the timing of various approvals.']
     }
 
-    final_summary= generate_final_discussion_summary(final_answers_dict,llm_model)
-    print(final_summary)
+    final_discussion_summary= get_refined_document_summary(final_discussion_dict,llm_model,e5_embedding_model)
+    final_answers_summary= get_refined_document_summary(final_answers_dict,llm_model,e5_embedding_model)
+    final_discussion_summary.update(final_answers_summary)
+    print("Completed")
+    print(final_discussion_summary)
 
 main()
