@@ -298,7 +298,7 @@ def question_theme_extraction_per_chunk(chunk_text, llm):
         Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content.
         Please ensure that your responses are socially unbiased and positive in nature.
         <</SYS>>
-        Generate exactly 1 most important key header with clear context relevant for financial information in maximum 3-4 words from the given text.Please do not include any explaination for the key header.
+        Generate exactly only one most important key header with clear context relevant for financial information in maximum 3-4 words from the given text.Please do not include any explaination for the key header.
         text: {text}
         key header:
         """
@@ -344,7 +344,7 @@ def main():
         print("Theme generation")
         chunk_txt= question_theme_extraction_per_chunk(items,llm_model)
         chunk_header= extract_headers_from_themes(chunk_txt.generations[0][0].text)
-        chunk_headers_list.append(chunk_txt)
+        chunk_headers_list.append(chunk_header)
     print(chunk_headers_list)
     # e5_embedding_model = SentenceTransformer('intfloat/e5-large')
     # final_discussion_dict={
