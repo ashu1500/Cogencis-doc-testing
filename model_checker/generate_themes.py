@@ -303,7 +303,7 @@ def question_theme_extraction_per_chunk(chunk_text, llm):
         Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content.
         Please ensure that your responses are socially unbiased and positive in nature.
         <</SYS>>
-        Generate exactly one concise key header (maximum 3-4 words) relevant for financial information from the given text. Provide only the header with no explanation and header must not be a question:
+        Generate exactly one concise key header (maximum 3-4 words) relevant for financial information from the given text. Provide only the header with no explanation and header must not be a question.Also,must not include numbers in key header:
         {text}
         key header:
         """
