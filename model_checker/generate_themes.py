@@ -105,7 +105,7 @@ def summary_generation_perchunk(theme, text, llm, num_points):
             Generate a summary consisting of exactly {num_points} bullet points based on the following text. Each bullet point should be clear, complete, and relevant to the theme '{theme}'. Each point should:
             - Be a complete thought, including both data and the reasoning behind it if applicable.
             - Be at least 20 words long.
-            - Should be a complete sentence with proper context.
+            - Each bullet point should be a complete sentence with proper context.
             - Include both direct observations and inferences derived from the text.
             - Avoid irrelevant details, question formats,headers and extra comments.
             - Ensure that the points are presented in a coherent and logical sequence.
