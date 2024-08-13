@@ -297,19 +297,19 @@ def get_refined_document_summary(chunk_dictionary,llm,embedding_model):
 def question_theme_extraction_per_chunk(chunk_text, llm):
     ''' Extract themes for each chunk'''
     try:
-        template = f"""<s>[INST] <<SYS>>
+        template = """<s>[INST] <<SYS>>
         <s>[INST] <<SYS>>
         You are a helpful, respectful, and honest assistant. Always answer as helpfully as possible, while being safe.
         Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content.
         Please ensure that your responses are socially unbiased and positive in nature.
         <</SYS>>
         Generate exactly one concise key header (maximum 3-4 words) that captures the most important point of the following financial information. Provide only the header with no explanation and header should not be a question:
-        {chunk_text}
+        {text}
         key header:
         """
 
-        prompt = PromptTemplate(template=template, input_variables=["chunk_text"])
-        result = llm.generate([prompt.format(chunk_text=chunk_text)])
+        prompt = PromptTemplate(template=template, input_variables=["text"])
+        result = llm.generate([prompt.format(text=chunk_text)])
         return result
     except Exception as e:
         print(e)
