@@ -303,7 +303,7 @@ def question_theme_extraction_per_chunk(chunk_text, llm):
         Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content.
         Please ensure that your responses are socially unbiased and positive in nature.
         <</SYS>>
-        Generate exactly one concise key header (maximum 3-4 words) that captures the most important point of the following financial information. Provide only the header with no explanation and header should not be a question:
+        Generate exactly one concise key header (maximum 3-4 words) relevant for financial information from the given text. Provide only the header with no explanation and header must not be a question:
         {text}
         key header:
         """
@@ -378,8 +378,8 @@ def get_final_question_themes(llm,input_list):
             all_chunk_header+=header
         print("All themes generated")
         ls=[actual_chunk_headers.append(x) for x in all_chunk_header if x not in actual_chunk_headers]
-        final_themes= set(list(map(lambda x: str(x).title(), actual_chunk_headers)))
-        return final_themes
+        # final_themes= set(list(map(lambda x: str(x).title(), actual_chunk_headers)))
+        return actual_chunk_headers
         
     except Exception as e:
         print(e)
