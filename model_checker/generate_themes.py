@@ -370,7 +370,9 @@ def get_final_question_themes(llm,input_list):
         for items in input_list:
             print("Theme generation")
             chunk_txt= question_theme_extraction_per_chunk(items,llm)
+            print("Chunk text generated")
             chunk_header= extract_headers_from_question_themes(chunk_txt.generations[0][0].text)
+            print("Chunk header generated")
             chunk_headers_list.append(chunk_header)
         for header in chunk_headers_list:
             all_chunk_header+=header
