@@ -34,70 +34,39 @@ def load_llama_model():
 
 llm_model= load_llama_model()
 
-def get_chunk_summary(llm, text):
-    """Generate a summary of the given text chunk using a language model."""
+#OVERALL DOCUMENT SUMMARY
+def get_chunk_summary(llm,input_text):
+    ''' Get summary of each chunk'''
     try:
-        print("Entering chunk summary generation")
-
-        # Refined prompt template for clarity and emphasis
         template = """
-        Write a concise summary of the following text, which is delimited by triple backquotes:
-        - The summary must strictly contain only factual information present in the text.
-        - Avoid adding any information that is not explicitly mentioned in the text.
-        - The summary should be in a single, continuous paragraph, and must avoid bullet points, lists, or names.
-        - Use third-person language (e.g., 'they', 'their') and avoid first-person pronouns like 'we', 'our', or 'us'.
-        - Do not include any kind of emojis, asterisks, or symbols.
-        - Keep the summary under 200 words, and make sure it flows logically from start to end.
-        - Do not interpret, analyze, or infer any content; only summarize the given text.
-        ```{text}```
-        SUMMARY:
-        """
-        
+                    Write a concise summary of the following text delimited by triple backquotes.
+                    Return your response in a paragraph in 1000 words.
+                    ```{text}```
+                    SUMMARY:
+                 """
         prompt = PromptTemplate(template=template, input_variables=["text"])
         llm_chain = prompt | llm
-        text_summary = llm_chain.invoke(text)
-
-        summary_parts = text_summary.split('SUMMARY:', 1)
-        chunk_summary = summary_parts[1].strip()
+        text_summary= llm_chain.invoke(input_text)
+        summary_parts= text_summary.split('SUMMARY:\n',1)
+        chunk_summary=summary_parts[1].strip()
         return chunk_summary
-
-    except Exception as ex:
-        print(f"Error in generating chunk summary: {str(ex)}")
-        raise ex
-    
-    finally:
-        print("Exiting chunk summary generation")
-    
-
-def get_chunk_summaries(llm, chunk_list):
-    '''Generate summaries for each chunk of the document'''
-    try:
-        print("Generating summaries for each chunk")
-        chunk_summaries = []
-        for chunk in chunk_list:
-            summary = get_chunk_summary(llm, chunk)
-            chunk_summaries.append(summary)
-        return chunk_summaries
-    except Exception as ex:
-        print(f"Error in get_chunk_summaries: {ex}")
-        raise ex
-    finally:
-        print("Completed generating chunk summaries")
+    except Exception as e:
+        print(e)
+        raise e     
 
 def get_overall_document_summary(llm_model,chunk_list):
     ''' Get overall summary of the document'''
     try:
-        print("Entering overall document summary")
-        chunk_summaries = get_chunk_summaries(llm_model, chunk_list)
-        overall_chunk_summary= ''.join(chunk_summaries)
-        return overall_chunk_summary
-    except Exception as ex:
-        print(f"Error in get overall document summary. {ex.args}")
-        raise ex
-    
-    finally:
-        print("Exiting overall document summary")
-
+        overall_summary=""
+        for text_chunk in chunk_list:
+            print("Chunk summary started")
+            summary= get_chunk_summary(llm_model,text_chunk)
+            overall_summary+= summary
+            print("Chunk summary generated")
+        return overall_summary
+    except Exception as e:
+        print(e)
+        raise e
 
 
 def main():

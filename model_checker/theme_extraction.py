@@ -170,13 +170,13 @@ def get_chunk_summary(llm,input_text):
 def get_overall_document_summary(llm_model,chunk_list):
     ''' Get overall summary of the document'''
     try:
-        summary=""
+        overall_summary=""
         for text_chunk in chunk_list:
             print("Chunk summary started")
-            input_data= text_chunk+summary
-            summary= get_chunk_summary(llm_model,input_data)
+            summary= get_chunk_summary(llm_model,text_chunk)
+            overall_summary+= summary
             print("Chunk summary generated")
-        return summary
+        return overall_summary
     except Exception as e:
         logging.error(e)
         raise e
