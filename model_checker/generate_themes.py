@@ -4,16 +4,14 @@ from transformers import pipeline
 from langchain_huggingface import HuggingFacePipeline
 from langchain_core.prompts import PromptTemplate
 import subprocess
-from sentence_transformers import SentenceTransformer
-from sentence_transformers.util import cos_sim
+# from sentence_transformers import SentenceTransformer
+# from sentence_transformers.util import cos_sim
 from accelerate import Accelerator
-import textwrap
 import re
 import datetime
 import torch
 import numpy as np
 from accelerate import Accelerator
-import concurrent.futures
 
 accelerator = Accelerator()
 
@@ -36,431 +34,118 @@ def load_llama_model():
 
 llm_model= load_llama_model()
 
-# THEME EXTRACTION
-def theme_extraction_per_chunk(chunk_text, llm):
-    ''' Extract themes for each chunk'''
+def get_chunk_summary(llm, text):
+    """Generate a summary of the given text chunk using a language model."""
     try:
-        template = """<s>[INST] <<SYS>>
-        You are a helpful assistant. Generate concise and relevant key headers based on the financial information in the text.
-        Avoid any harmful, unethical, or biased content.
-        <</SYS>>
-        Generate 2 key headers (maximum 3-4 words each) from the following text. No explanations needed and don't include company name.
-        text: {text}
-        key headers:
+        print("Entering chunk summary generation")
+
+        # Refined prompt template for clarity and emphasis
+        template = """
+        Write a concise summary of the following text, which is delimited by triple backquotes:
+        - The summary must strictly contain only factual information present in the text.
+        - Avoid adding any information that is not explicitly mentioned in the text.
+        - The summary should be in a single, continuous paragraph, and must avoid bullet points, lists, or names.
+        - Use third-person language (e.g., 'they', 'their') and avoid first-person pronouns like 'we', 'our', or 'us'.
+        - Do not include any kind of emojis, asterisks, or symbols.
+        - Keep the summary under 200 words, and make sure it flows logically from start to end.
+        - Do not interpret, analyze, or infer any content; only summarize the given text.
+        ```{text}```
+        SUMMARY:
         """
-
+        
         prompt = PromptTemplate(template=template, input_variables=["text"])
-        result = llm.generate([prompt.format(text=chunk_text)])
-        return result
-    except Exception as e:
-        print(e)
-        raise e
+        llm_chain = prompt | llm
+        text_summary = llm_chain.invoke(text)
+
+        summary_parts = text_summary.split('SUMMARY:', 1)
+        chunk_summary = summary_parts[1].strip()
+        return chunk_summary
+
+    except Exception as ex:
+        print(f"Error in generating chunk summary: {str(ex)}")
+        raise ex
     
-
-def extract_headers_from_themes(output_text):
-    ''' Get headers list for themes'''
-    try:
-        start_index = output_text.find("key headers:")
-        themes_section = output_text[start_index:]
-        themes_lines = themes_section.split("\n")
-        themes_lines = [line.strip() for line in themes_lines[1:] if line.strip()]
-        headers_list = []
-        for theme_line in themes_lines:
-            if theme_line.strip().startswith(tuple(f"{i}." for i in range(1, 11))):
-                if ":" in theme_line:
-                    header = theme_line.split(":")[1].strip()
-                    headers_list.append(header)
-                else:
-                    header = theme_line.split(".")[1].strip()
-                    headers_list.append(header)
-
-        return headers_list
-    except Exception as e:
-        print(e)
-        raise e
-
-# SUMMARY GENERATION
-
-def extract_summary_section_perchunk(text):
-    """Post processing to extract summary section from the text."""
-    try:
-        keyword = "SUMMARY:"
-        keyword_pos = text.find(keyword)
-        if keyword_pos != -1:
-            summary = text[keyword_pos + len(keyword):].strip()
-            return summary
-        else:
-            print("Keyword 'SUMMARY' not found in the text.")
-            return None
-    except Exception as e:
-        print("Unexpected error while extracting summary section per chunk: %s", e)
-        raise e
-
-
-def summary_generation_perchunk(theme, text, llm, num_points):
-    """Generate summary for each chunk based on the keywords."""
-    try:
-        print("Entering summary generation per chunk")
-        template = f"""
-            Generate a summary consisting of exactly {num_points} bullet points based on the following text. Each bullet point should be clear, complete, and relevant to the theme '{theme}'. Each point should:
-            - Be a complete thought, including both data and the reasoning behind it if applicable.
-            - Be at least 20 words long.
-            - Each bullet point should be a complete sentence with proper context.
-            - Include both direct observations and inferences derived from the text.
-            - Avoid irrelevant details, question formats,headers and extra comments.
-            - Ensure that the points are presented in a coherent and logical sequence.
-
-            TEXT:
-            {text}
-
-            SUMMARY:
-            """
-        prompt = PromptTemplate(template=template, input_variables=["text", "theme"])
-        result = llm.generate([prompt.format(text=text, theme=theme)])
-        final = extract_summary_section_perchunk(result.generations[0][0].text)
-        return final
-    except Exception as e:
-        print("Error generating summary per chunk: %s", e)
-        raise e
     finally:
-        print("Exiting summary generation per chunk")
-
-
-def remove_unwanted_headers(text):
-    """Remove numbered headers and generate as bullet points"""
-    try:
-        lines = text.strip().split("\n")
-        processed_lines = []
-        for line in lines:
-            line= line.strip()
-            if not line:
-                continue
-            line = re.sub(r'\d+\. ', '\n• ', line).strip()
-            if line.startswith("•"):
-                colon_pos = line.find(":")
-                if colon_pos != -1:
-                    processed_line = "• " + line[colon_pos + 1:].strip()
-                    processed_lines.append(processed_line)
-                else:
-                    processed_line = line.strip()
-                    processed_lines.append(processed_line)
+        print("Exiting chunk summary generation")
     
-            else:
-                processed_lines.append(line.strip())
-        processed_text = "\n".join(processed_lines)
-        final_processed_text= re.sub(r'\n\n', '\n', processed_text)
-        return final_processed_text
-    except Exception as e:
-        print("Error removing headers: %s", e)
-        raise e
 
-
-def generate_theme_summary(theme,chunk_list,llm):
+def get_chunk_summaries(llm, chunk_list):
+    '''Generate summaries for each chunk of the document'''
     try:
-        print("Entered theme summary generation")
-        theme_summary=""
+        print("Generating summaries for each chunk")
+        chunk_summaries = []
         for chunk in chunk_list:
-            if len(chunk)>=100 and len(chunk)<300:
-                chunk_summary= summary_generation_perchunk(theme,chunk,llm,1)
-            elif len(chunk)>=300 and len(chunk)<500:
-                chunk_summary= summary_generation_perchunk(theme,chunk,llm,2)
-            elif len(chunk)>=500 and len(chunk)<1000:
-                chunk_summary= summary_generation_perchunk(theme,chunk,llm,3)
-            elif len(chunk)>=1000:
-                chunk_summary= summary_generation_perchunk(theme,chunk,llm,5)
-            chunk_summary_list= chunk_summary.split('\n')[:5]
-            chunk_summary_list = list(map(str.strip, chunk_summary_list))
-            actual_chunk_summary= "\n".join(chunk_summary_list)
-            processed_summary= remove_unwanted_headers(actual_chunk_summary)
-            theme_summary+="\n"
-            theme_summary+= processed_summary
-        
-        return theme_summary
+            summary = get_chunk_summary(llm, chunk)
+            chunk_summaries.append(summary)
+        return chunk_summaries
     except Exception as ex:
-        print(ex)
-
-
-def get_document_theme_summary(chunk_dictionary,llm):
-    '''Get theme-based summary of document'''
-    try:
-        theme_based_summary={}
-        summary_generation_time={}
-        for theme,chunk in chunk_dictionary.items():
-            if chunk:
-                print("Theme summary started")
-                theme_based_summary[theme]= generate_theme_summary(theme,chunk,llm)
-                print("Theme summary generated")
-                summary_generation_time[theme]= str(datetime.datetime.now().time())
-                print(datetime.datetime.now())
-            else:
-                continue
-        final_theme_based_summary = {k: v for k, v in theme_based_summary.items() if v.strip() not in (None, '')}
-        return final_theme_based_summary,summary_generation_time
-    except Exception as e:
-        print(e)
-        raise e
-
-def generate_embeddings(e5_model,chunk_text):
-    ''' Generate embeddings for the document chunks'''
-    try:
-        chunk_embeddings= e5_model.encode(str(chunk_text), normalize_embeddings=True)
-        return chunk_embeddings
-    except Exception as e:
-        print(e)
-        raise e
-    
-
-def generate_final_theme_summary(embedding_model,theme,theme_summary):
-    ''' Generate final theme summary'''
-    try:
-        final_summary=[]
-        summary_points= theme_summary.strip().split("\n")
-        summary_points= [x for x in summary_points if x.strip() not in ['']]
-        theme_embedding= generate_embeddings(embedding_model,theme)
-        summary_embeddings= [generate_embeddings(embedding_model,summary) for summary in summary_points]
-        for x in range(len(summary_embeddings)):
-            if cos_sim(theme_embedding,summary_embeddings[x]).item()>0.77:
-                final_summary.append(summary_points[x])
-        final_theme_summary= "\n".join(final_summary)
-        return final_theme_summary
-
-    except Exception as ex:
-        print(ex)
+        print(f"Error in get_chunk_summaries: {ex}")
         raise ex
+    finally:
+        print("Completed generating chunk summaries")
 
-
-def compare_two_themes(embedding_model,theme1_summary,theme2_summary):
-    ''' Check similarity between two themes'''
+def get_overall_document_summary(llm_model,chunk_list):
+    ''' Get overall summary of the document'''
     try:
-        similar_pairs=[]
-        theme1_summary_points= theme1_summary.strip().split("\n")
-        theme2_summary_points= theme2_summary.strip().split("\n")
-        theme1_embeddings=[generate_embeddings(embedding_model,summary_point) for summary_point in theme1_summary_points]
-        theme2_embeddings=[generate_embeddings(embedding_model,summary_point) for summary_point in theme2_summary_points]
-        for i in range(len(theme1_embeddings)):
-            for j in range(len(theme2_embeddings)):
-                if (cos_sim(theme1_embeddings[i],theme2_embeddings[j])).item()>0.9:
-                    similar_pairs.append((theme1_summary[i],theme2_summary[j]))
-        if len(similar_pairs)>3:
-            return True
-        else:
-            return False
+        print("Entering overall document summary")
+        chunk_summaries = get_chunk_summaries(llm_model, chunk_list)
+        overall_chunk_summary= ''.join(chunk_summaries)
+        return overall_chunk_summary
     except Exception as ex:
-        print(ex)
+        print(f"Error in get overall document summary. {ex.args}")
         raise ex
     
-def check_similar_theme_summaries(embedding_model,theme_based_summary):
-    ''' Get final theme based summaries'''
-    try:
-        themes_summary_list= list(theme_based_summary.values())
-        themes_list= list(theme_based_summary.keys())
-        for x in range (len(theme_based_summary)):
-            for y in range(x+1,len(theme_based_summary)):
-                if compare_two_themes(embedding_model,themes_summary_list[x],themes_summary_list[y]):
-                    theme_based_summary[themes_list[x]]+= theme_based_summary[themes_list[y]]
-                    theme_based_summary[themes_list[y]]= " "
-        final_theme_based_summary = {k: v for k, v in theme_based_summary.items() if v.strip() not in (None, '','•')}
-        return final_theme_based_summary
+    finally:
+        print("Exiting overall document summary")
 
-    except Exception as ex:
-        print(ex)
-        raise ex
 
-def remove_similar_summary_points(embedding_model,theme_summary):
-    ''' Check similarity between summary points'''
-    try:
-        print("Removing similar summary points")
-        indices_to_remove=set()
-        summary_points= theme_summary.strip().split("\n")
-        summary_embeddings= [generate_embeddings(embedding_model,summary) for summary in summary_points]
-        for i in range(len(summary_embeddings)):
-            for j in range(i+1,len(summary_embeddings)):
-                if (cos_sim(summary_embeddings[i],summary_embeddings[j]).item())>0.89:
-                  indices_to_remove.add(j)
-        filtered_summary_points = [point for idx, point in enumerate(summary_points) if idx not in indices_to_remove]
-        final_theme_summary= "\n".join(set(filtered_summary_points))
-        return final_theme_summary
-    except Exception as ex:
-        print(ex)
-        raise ex
-
-def get_refined_document_summary(chunk_dictionary,llm):
-    ''' Apply cosine similarity to remove similar data'''
-    try:
-        final_doc_summary={}
-        refined_document_summary={}
-        document_summary,summary_processing_time= get_document_theme_summary(chunk_dictionary,llm)
-        # for theme,summary in document_summary.items():
-        #     refined_document_summary[theme]= generate_final_theme_summary(embedding_model,theme,summary)
-        # final_refined_summary = {k: v for k, v in refined_document_summary.items() if v.strip() not in (None, '')}
-        # refined_summary= check_similar_theme_summaries(embedding_model,final_refined_summary)
-        # for theme,summary in refined_summary.items():
-        #     final_doc_summary[theme]= remove_similar_summary_points(embedding_model,summary)
-        # summary_processing_time["Final Summary Generation"]= str(datetime.datetime.now().time())
-
-        return document_summary
-    except Exception as ex:
-        print(ex)
-        raise ex
-
-def question_theme_extraction_per_chunk(chunk_text, llm):
-    ''' Extract themes for each chunk'''
-    try:
-        template = """<s>[INST] <<SYS>>
-        <s>[INST] <<SYS>>
-        You are a helpful, respectful, and honest assistant. Always answer as helpfully as possible, while being safe.
-        Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content.
-        Please ensure that your responses are socially unbiased and positive in nature.
-        <</SYS>>
-        Generate exactly one concise key header (maximum 3-4 words) relevant for financial information from the given text. Provide only the header with no explanation and header must not be a question.Also,must not include numbers in key header:
-        {text}
-        key header:
-        """
-
-        prompt = PromptTemplate(template=template, input_variables=["text"])
-        result = llm.generate([prompt.format(text=chunk_text)])
-        return result
-    except Exception as e:
-        print(e)
-        raise e
-    
-def extract_headers_from_question_themes(output_text):
-    ''' Get headers list for themes'''
-    try:
-        start_index = output_text.find("key header:")
-        themes_section = output_text[start_index:]
-        themes_lines = themes_section.split("\n")
-        themes_lines = [line.strip() for line in themes_lines[1:] if line.strip()]
-        headers_list = []
-        theme_line= themes_lines[0]
-        if theme_line.strip().startswith(tuple(f"{i}." for i in range(1, 11))):
-          if ":" in theme_line:
-            header = theme_line.split(":")[1].strip()
-            headers_list.append(header)
-          else:
-            header = theme_line.split(".")[1].strip()
-            headers_list.append(header)
-        else:
-          headers_list.append(theme_line)
-
-        return headers_list
-    except Exception as e:
-        print(e)
-        raise e
-
-def get_final_transcript_themes(llm,input_list):
-    '''Get final themes for the transcript document'''
-    try:
-        chunk_headers_list=[]
-        all_chunk_header=[]
-        actual_chunk_headers=[]
-        for items in input_list:
-            print("Theme generation")
-            chunk_txt= theme_extraction_per_chunk(items,llm)
-            chunk_header= extract_headers_from_themes(chunk_txt.generations[0][0].text)
-            chunk_headers_list.append(chunk_header)
-        for header in chunk_headers_list:
-            all_chunk_header+=header
-        print("All themes generated")
-        ls=[actual_chunk_headers.append(x) for x in all_chunk_header if x not in actual_chunk_headers]
-        final_themes= set(list(map(lambda x: str(x).title(), actual_chunk_headers)))
-        return final_themes
-        
-    except Exception as e:
-        print(e)
-        raise e
-
-def get_final_question_themes(llm,input_list):
-    '''Get final themes for the transcript document'''
-    try:
-        chunk_headers_list=[]
-        all_chunk_header=[]
-        actual_chunk_headers=[]
-        for items in input_list:
-            print("Theme generation")
-            chunk_txt= question_theme_extraction_per_chunk(items,llm)
-            print("Chunk text generated")
-            chunk_header= extract_headers_from_question_themes(chunk_txt.generations[0][0].text)
-            print("Chunk header generated")
-            chunk_headers_list.append(chunk_header)
-        for header in chunk_headers_list:
-            all_chunk_header+=header
-        print("All themes generated")
-        ls=[actual_chunk_headers.append(x) for x in all_chunk_header if x not in actual_chunk_headers]
-        # final_themes= set(list(map(lambda x: str(x).title(), actual_chunk_headers)))
-        return actual_chunk_headers
-        
-    except Exception as e:
-        print(e)
-        raise e
 
 def main():
-    adani_discussion_points=[
-        "Thank you so much. Hi Good Morning all. This is Robbie Singh, CFO of Adani Enterprise. I welcome you all to the earnings call to discuss Q1 FY23 results. AEL continues to create value for its shareholders as a successful incubator for the past two-and-a-half decades. This incubation model has created leaders in the respective sectors like Adani Ports, Adani Transmission, Adani Green Energy, Adani Total Gas, and Adani Wilmar and has delivered returns at a compound annual growth rate of 36% to shareholders. AEL holds a portfolio of businesses - both established and incubating - which are spread across different verticals in energy and utility, transport and logistics, direct to consumer and primary industries. Within primary industries it has established businesses of mining services and integrated resource management along with the developing vertical of metals. As our established business continue to sustain long term growth, we are making significant progress in our attractive incubation pipeline comprising of energy and utility which is Adani New Industries - it is a green hydrogen ecosystem and full service data center business AdaniConneX. In the transport and logistics we have Adani Airport Holdings and Adani Road Transport Limited businesses which will further accelerate value creation for Adani Enterprise shareholders. We are happy to inform that AEL has completed primary equity transaction of Rs.7700 Crores with Abu Dhabi based International Holding Company for 3.5% stake. This validates our strong capital management philosophy of equity funded growth and conservative leverage targets.",
-        "Let me give you a quick update of our incubating businesses. In Adani New Industry portfolio as all of you would know we have announced investment of USD 50 billion over the next decade in developing green hydrogen ecosystem. This will be housed under Adani New Industry Limited. ANIL will have three business streams — (i) Manufacturing ecosystem to include module, cell, ingots, wafers and wind turbines, electrolyzers and associated ancillary equipment ecosystem. (ii) The green hydrogen generation include development of solar and wind power plants to produce green hydrogen (iii) Downstream products depending on the usage for ammonia, urea, methanol, etc. During the quarter we announced our partnership with TotalEnergies to develop the world’s largest green H2 ecosystem. TotalEnergies will acquire 25% stake in ANIL. While thetransaction will follow customary approval process, it takes the company one step ahead to produce the world’s least expensive electrons which will drive our ability to produce the world’s least expensive green hydrogen. Following are some of the updates on development: Existing capacity of 1.5 GW at Mundra is increasing to 3.5 GW and this additional 2 GW will be completed by September this year. With this the overall capacity will reach to 3.5 GW. Wind turbine erection for the first 5.2 MW wind turbine has been completed and testing and certification is underway. We expect completion in the next 6 months. We have identified three trial sites for initial testing of electrolyzers and we expect the testing to commence by end of this calendar year or early next year. From operational point of view, module sales from our manufacturing ecosystem within ANIL stood at 264 MW. EBITDA from these sales was at Rs. 42 Crores.",
-        "In Adani Airport Holdings portfolio, passengers movement at the airports increased by 35% and it is now at 16.6 million which is approximately 85% of the pre-COVID numbers. Construction at Navi Mumbai International Airport has started and approximately 26% of the work is completed. In Adani Road Transport portfolio, we have signed concession agreement in May for Kagal-Satara road project of 65 KMs in Maharashtra under BOT basis. We have also received provisional COD for Bilaspur road project and construction activity is progressing well on other 8 road projects. The current road portfolio is now approximately Rs.38000 Crores of both operating and under development projects.",
-        "A quick update of primary industries before I handover to my colleague Vinay. We achieved financial closure for our first metals business copper. This was led by SBI and it has been further down sold to various other banks. Financial performance of AEL for this quarter in terms of revenue number has increased 223% and now is at Rs.41066 Crores. Consolidated EBITDA increased by over 100% and is at Rs.1965 Crores with strong performance from both established and incubating businesses. Now I invite my colleague Vinay to take you through mining services and IRM business highlights. Vinay over to you!",
-        "Thanks Robbie. Good Morning to all. In fact as far as the mining services business is concerned Adani Enterprise Limited is the pioneer of MDO concept in India with an integrated business model that spans across developing mines as well as the entire upstream and downstream activities. It provides the full service range - right from seeking various approvals, land acquisition, R&R, developing required infrastructure, mining, beneficiation and transportation to designated consumption plants. The company is also MDO for nine coal blocks and two iron ore blocks with combined peak capacity of 120 MMT per annum. These 11 projects are located in the state of Chhattisgarh, MP and Odisha. The mining production volume increased by 72% to 8.1 MMT on year-on-year basis and further dispatch increased by 58% to 7.2 MMT on year-on- year basis. The revenue from mining services increased by 18% to Rs. 677 Crores and EBITDA stood at Rs. 268 Crores versus Rs. 307 Cores on year-on-year basis on account of high operating costs. As Robbie told about copper business apart from financial closure, operational activities are progressing well and it is as per schedule. Additionally, we have also received PLI scheme approval for copper tube value added scheme for our copper business. As far as the IRM business is concerned, in terms of IRM business we have continued to develop business relationship withdiversified customers across various end-user industries. We retained number one player position in India and having the endeavor to maintain this position going forward. The volume in Q1 FY23 increased by 52% to 26.7 MMT, the EBITDA has increased by 72% to Rs.950 Crores on account of higher volumes. Thank you."
+    indigo_discussion_data=['Sub: Transcript of earnings call on financial results for the quarter ended June 30, 2024Pursuant to Regulation 30 of SEBI (Listing Obligations and Disclosure Requirements) Regulations, 2015, please find attached the transcript of earnings call held on July 26, 2024, on financial results for the quarter ended June 30, 2024.',
+                            'The above is for your information.',
+                            "Yours faithfully, For InterGlobe Aviation Limited NEERJA Digitally signed by NEERJA SHARMA SHARMA Date: 2024.08.01 17:44:21 +05'30'Company Secretary and Chief Compliance Officer",
+                            'Good evening, everyone, and thank you for joining us for the first quarter of fiscal year 2025 earnings call.',
+                            'We have with us our Chief Executive Officer - Pieter Elbers and our Chief Financial Officer — Gaurav Negi to discuss the financial performance and are available for the Q&A session.',
+                            'Please note that today’s discussion may contain certain statements on our business or financials which may be construed as forward-looking. Our actual results may be materially different from these forward-looking statements.',
+                            'The information provided on this call is as of today’s date and we undertake no obligation to update the information subsequently.',
+                            'We will upload the transcript of prepared remarks by day end. The transcript of the Q&A session will be uploaded subsequently.',
+                            'With this, let me hand over the call to Pieter Elbers.',
+                            'For the first quarter of the financial year 2025, we reported a quarterly total income of 202 billion rupees, which is an increase of 18% as compared to same period last year. In terms of profitability, we reported a profit after tax of 27.3 billion rupees — 2,729 crore rupees with a profit after tax margin of around 14%. With these results, we have reported seven consecutive quarters of profitability.',
+                            'We proudly served around 28 million customers during the quarter. And I would like to express my gratitude to each customer for choosing to fly with us. Our customers are the reason we do what we do and we remain committed to making every journey with us a memorable and enjoyable experience. We take into consideration all the feedback that we receive and makes changes to our product & services accordingly. I would like to highlight some of the recent changes that we have made:First of all, we are in the process of launching a tailor-made business product for the nation’s busiest and business routes',
+                            'We have introduced a web check-in seat selection feature, specifically for women travellers.',
+                            'We are in the process of revamping our website and mobile application for enhanced customer experience.',
+                            'And, we have added a hotel booking option for our customers on our website and appAdditionally, on the operations side we are constantly expanding the role of technology in order to serve our customers better as recently we became the first airline in India to get approval from the regulator for Electronic Flight Folder that will enable reduction in the time spent on pre-flight preparations, smoother operations and will add to the overall operational efficiency.',
+                            'We will be unveiling a lot more details on some of these changes next week during our 18th Anniversary celebration.',
+                            'When we first took to the skies, we envisioned an airline that would not only transport passengers from one destination to another but would also connect the vast and diverse cultures across India. And over the past 18 years, we have grown to the world’s seventh largest airline, in terms of daily departures and have become India’s most preferred airline.',
+                            'Since our inception, India’s and IndiGo’s growth story have been closely interlinked. And we believe as India gears up to become the third-largest economy in the world, it’s important that we devise our strategy to, not only capitalize the opportunity, but also stay ahead of the curve. The Indian market, as we shared earlier, is still largely underpenetrated when it comes to air travel. And even more so, when it comes to international air travel. So, there is a buoyant market out there, hand in hand with the growth of the Indian economy.',
+                            'With IATA’s 81st AGM to be held in Delhi in 2025, India’s aviation industry potential is being recognized, also at a global stage. And we are proud to be the host airline for IATA AGM next year and look forward to welcoming the global aviation community to our home country.',
+                            'Expanding our network is a key part of our growth strategy. And we have added 30 new routes on a year-over-year basis as we fly to more than 540 routes currently. Further, in line with growing demand we are further enhancing our international capacity deployment to Central Asia and as from mid of August we will be flying daily to the cities we added last year - Tashkent, Almaty and Tblisi.',
+                            'As guided at the starting of the year, we will continue to add more destinations and frequencies in the coming quarters to grow by early double digits in the financial year 2025.',
+                            'We have the Airbus XLRs joining our fleet next year which will allow us to reach the southern parts of Europe and further into Asia as well. Then to further expand our range, we have the Airbus A350-900 coming in from the year 2027.',
+                            'In addition to that, our codeshare networks have been a very important pillar of our international strategy. Our experience of partnerships with multiple global airlines has exposed us to the needs and preferences of international customers, preparing us for the next stage of operations as so that we are able to apply the learnings once we have widebodies. Recently, we have announced codeshare partnership with Japan Airlines, under which Japan Airlines’ customers will be able to seamlessly travel to 14 Indian cities through Delhi and Bengaluru. All of these elements are building blocks of the very same cohesive strategy towards internationalization.',
+                            'Operationally, over the past few quarters, as the air traffic in India continues to grow and infrastructure enhancements are being implemented across various stations, we have been experiencing increased block times and congestion. We are working relentlessly and taking all possible internal actions such as adjusting schedules to reassure our customer promises.',
+                            'Additionally, due to the unfortunate event of canopy collapse in Delhi’s Terminal 1, we had to shift our operations to other terminals in a very short period of time and very recently the massive IT outage globally, which was not limited to the airlines, impacted hundreds of our flights over a two-day timeframe. IndiGo teams immediately stood up and dealt with the situation to minimize the impact for our customers. And I would like to sincerely thank my 6E colleagues for going above and beyond to serve our customers in these extraordinary times.',
+                            'While large global airlines are facing multiple headwinds currently due to various factors. Given the size of the opportunity that India presents, and our clear strategy combined with a strong execution by the IndiGo team I remain confident that we will continue to reach new heights. As we enter the next phase of our growth, we remain committed towards our goal of 2030 and are investing heavily to support our growth plans.',
+                            'Let me now hand over the call to Gaurav to discuss the financial performance in more detail.',
+                            'Thank you, Pieter and good evening, everyone.',
+                            'For the quarter ended June 2024, we reported a net profit of 27.3 billion rupees with a net profit margin of 13.9% compared to a net profit of 30.9 billion rupees for the quarter ended June 2023.',
+                            'We reported an EBITDAR of 58.1 billion rupees with an EBITDAR margin of around 30 percent compared to an EBITDAR of 52.1 billion rupees for the quarter ended June 2023.',
+                            'On the revenue side, we experienced a similar revenue environment as compared to same period last year as the passenger unit revenue, PRASK, came in at 4.54 rupees. The yields came in at5.24 rupees, an improvement of 1.3 percent as compared to the same period last year which was offset by a marginally lower load factors of around 87%. Our unit revenue, which is RASK, came in at 5.40 rupees, which is around 5.5 percent higher compared to the quarter ended June 2023 primarily driven by accruals of the compensation that we have finalized with the OEM for the AOG.',
+                            'On the cost side, the fuel CASK increased by 10.5 percent primarily driven by increase in fuel costs we have witnessed year over yearWhen one reviews the CASK ex fuel we experienced a similar increase of around 11 percent in the June 2024 quarter as compared to same period last year.',
+                            'Now excluding the impact of forex, the CASK ex fuel ex forex increased by around 9 percent, compared to the same period last year primarily driven by aircraft grounding related costs, annual contractual escalations, inflationary pressures, annual increments, and the investments we continue to make towards supporting the future growth in areas of digital technology, talent and new initiatives.',
+                            'Moving to the grounding of aircraft, the current count of grounded aircraft remains range bound at mid-seventies. We are working with Pratt & Whitney towards constant supply of spare engines and basis the current estimates we expect the groundings to start reducing towards the start of the next year. Further as communicated earlier, during the quarter we have finalized an amendment to the existing agreement with Pratt & Whitney for providing us with a customized compensation in relation to the grounding of aircraft due to spare engine unavailability.',
+                            'During the quarter, we inducted 15 aircraft of which 8 are from original order book and remaining 7 were inducted as part of our mitigation measures in the form of damp leases and secondary leases. As of June 30", we have a total of 382 aircraft of which 14 aircraft are on finance leases and 18 aircraft are on damp leases. In addition to this, subject to regulatory approvals we will induct 6 more aircraft from Qatar Airlines for the Doha route on wet or damp lease in the coming quarters.',
+                            'As shared previously, in order to diversify our sources of financing we have added 14 aircraft on finance leases in the last three quarters. Going forward, we will continue to further diversify our sources and will add more aircraft on finance leases. The tenure of these finance leases is similar to the operating leases of 8-10 years, and we will have the right to own the assets at the end of the lease term at a nominal price.',
+                            'In terms of recognition, in an operating lease we recognize the ROU and the lease liability at a present value of lease payments, which is then depreciated over the lease period and the interest is accrued on the lease liability. Supplementary Rentals & Maintenance is also accrued on the flying hours of the aircraft.',
+                            'Whereas, when it comes to finance leases, the full value of the aircraft is capitalized in the ROU, which is then depreciated based on the component accounted in the aircraft value. Similarly, theinterest is also accrued on the full value of the aircraft, but over the lease term. As a result, one will witness a higher allocation of interest and depreciation in the earlier years which will taper down over the lease term and life of the asset. Additionally, in finance leases the maintenance costs are capitalized when the maintenance event is carried out.',
+                            'We ended the quarter with a capitalized operating lease liability of 449.6 billion rupees and a total debt, including the capitalized operating lease liability of around 525.3 billion rupees. Our right to use assets at quarter end were 358.6 billion rupees.',
+                            'Due to our strong financial performance, our liquidity has further improved as we ended the June quarter with a free cash of 220.9 billion rupees. We continue to utilize part of our free cash towards future growth and our goal to become a 600 plus aircraft airline by the end of the decade.',
+                            'With our firm pending orderbook of 975 plus aircraft that will enable us to receive more than one aircraft per week and the mitigation measures we remain firm on our capacity guidance of early double digits for the financial year 2025. And for the seasonally weak second quarter, we are expecting to add around high single digits capacity as compared to the same period last year. Further, on the revenue side basis the early trends of July, we are estimating a stable revenue environment on a passenger unit revenue which is PRASK basis in the second quarter of financial year 2025 as compared to the same period last year.',
+                            'We will be turning 18 soon, we are proud of the legacy that we have built, and we are carefully considering the changing needs of our customers and making product advancements accordingly. As we embark on the next chapter of our journey our robust strategy and our improved financial health will provide us with the resources to invest for the future, explore new frontiers and reach greater heights.',
+                            'With this, let me hand it back to Richa.'
     ]
-    adani_questions_list=[
-        'Good Morning Sir and congratulations on achieving success in number of initiatives and especially raising money. Sir my first question is on the mining operations given that you achieved 8.1 million tonne our profitability EBITDA is not improving it has happened in Q4 also and in this quarter as well. How do you expect this EBITDA ramp up to happen, I understand that we opened around 55 million tonne of capacity when do you expect this peak capacity to achieve?',
-        'The new mines which are under development, which are the next mines you are likely to open in the next 24 months?',
-        'Understood Sir and is it possible to break up the IRM operations into Carmichael and PO trading business? Is it possible are you sharing that number, in case you are sharing please share the revenue EBITDA number for Carmichael?',
-        'First on the LoA side the government I think we are participating in the PLI scheme and we were one of the winners of that have we received the LoA from the government?',
-        'Understood Sir. Of course we are doing the first ramp up of 1.5 to 3.5 megawatt. What is the next in the solar manufacturing business and what duration you think you will do the third expansion?',
-        'Hi Sir. Thank you so much for the opportunity. Sir I wanted to know if we have finalized the electrolyzer technology partnership?',
-        'Sir also on the wind capacity side, can you guide by when this 2.5 gigawatt capacity be commercial and also will we be selling the turbines to third party in the commercial market or will it entirely be for our captive consumption?',
-        'Right Sir and last question from my side and that is on the power storage front. So, I believe for producing hydrogen using alkaline which we will be going for initially we require sort of longer duration power available or more reliable power so what is our take on that. Which technology or which method of storage will we be backing ? Will it be from hydro or battery and in either cases if you have already done some tie ups?',
-        'Okay Sir last question if I may squeeze in one more and I believe we intend to move hydrogen from Khavda to Mundra using a pipeline so have we started the construction of it and what type of capital cost can we expect?',
-        'Thank you Sir for the opportunity. Robbie, I wanted to understand what would be the capital requirements across our various businesses over the next few years especially on the equity side?',
-        'Sure thanks for that. On the airport business side if you can help us understand some of your plans because now it has been a few months since we have taken over the Mumbai airport as well and Navi Mumbai construction has also started. So how should we think about the trajectory for revenues as well as EBITDA over the next few years?',
-        'Sure and just one clarification when you talk about city side development does this include the real estate monetization at the Mumbai airport as well or that is excluding that?',
-        'My second question is on the profitability of the solar business. I think this quarter it was impacted adversely I believe this is primary because of the movement in polysilicon prices. How do you see over the next couple of quarters given the fact that you are going to ramp up, do you think the profitability when will go back to old level of profitability?',
-        'Hi Sir and thanks for the opportunity. Just one question. Most of them have been answered. On the MDO front we have given guidance of around 40 million tonnes in this year and around 75 odd tonnes next year so can you just update on that whether are we maintaining it or upgrading it?'
-    ]
-
-    np.random.seed(42)
-    print("Generating discussion themes")
-    discussion_themes= get_final_transcript_themes(llm_model,adani_discussion_points)
-    print(discussion_themes)
-    # question_themes= get_final_question_themes(llm_model,adani_questions_list)
-    # print(question_themes)
-#     e5_embedding_model = SentenceTransformer('intfloat/e5-large')
-    final_discussion_dict={
-        'Portfolio of Businesses': ['Thank you so much. Hi Good Morning all. This is Robbie Singh, CFO of Adani Enterprise. I welcome you all to the earnings call to discuss Q1 FY23 results. AEL continues to create value for its shareholders as a successful incubator for the past two-and-a-half decades. This incubation model has created leaders in the respective sectors like Adani Ports, Adani Transmission, Adani Green Energy, Adani Total Gas, and Adani Wilmar and has delivered returns at a compound annual growth rate of 36% to shareholders. AEL holds a portfolio of businesses - both established and incubating - which are spread across different verticals in energy and utility, transport and logistics, direct to consumer and primary industries. Within primary industries it has established businesses of mining services and integrated resource management along with the developing vertical of metals. As our established business continue to sustain long term growth, we are making significant progress in our attractive incubation pipeline comprising of energy and utility which is Adani New Industries - it is a green hydrogen ecosystem and full service data center business AdaniConneX. In the transport and logistics we have Adani Airport Holdings and Adani Road Transport Limited businesses which will further accelerate value creation for Adani Enterprise shareholders. We are happy to inform that AEL has completed primary equity transaction of Rs.7700 Crores with Abu Dhabi based International Holding Company for 3.5% stake. This validates our strong capital management philosophy of equity funded growth and conservative leverage targets.','Thanks Robbie. Good Morning to all. In fact as far as the mining services business is concerned Adani Enterprise Limited is the pioneer of MDO concept in India with an integrated business model that spans across developing mines as well as the entire upstream and downstream activities. It provides the full service range - right from seeking various approvals, land acquisition, R&R, developing required infrastructure, mining, beneficiation and transportation to designated consumption plants. The company is also MDO for nine coal blocks and two iron ore blocks with combined peak capacity of 120 MMT per annum. These 11 projects are located in the state of Chhattisgarh, MP and Odisha. The mining production volume increased by 72% to 8.1 MMT on year-on-year basis and further dispatch increased by 58% to 7.2 MMT on year-on- year basis. The revenue from mining services increased by 18% to Rs. 677 Crores and EBITDA stood at Rs. 268 Crores versus Rs. 307 Cores on year-on-year basis on account of high operating costs. As Robbie told about copper business apart from financial closure, operational activities are progressing well and it is as per schedule. Additionally, we have also received PLI scheme approval for copper tube value added scheme for our copper business. As far as the IRM business is concerned, in terms of IRM business we have continued to develop business relationship withdiversified customers across various end-user industries. We retained number one player position in India and having the endeavor to maintain this position going forward. The volume in Q1 FY23 increased by 52% to 26.7 MMT, the EBITDA has increased by 72% to Rs.950 Crores on account of higher volumes. Thank you.'],
-        'Green Hydrogen Ecosystem': ['Let me give you a quick update of our incubating businesses. In Adani New Industry portfolio as all of you would know we have announced investment of USD 50 billion over the next decade in developing green hydrogen ecosystem. This will be housed under Adani New Industry Limited. ANIL will have three business streams — (i) Manufacturing ecosystem to include module, cell, ingots, wafers and wind turbines, electrolyzers and associated ancillary equipment ecosystem. (ii) The green hydrogen generation include development of solar and wind power plants to produce green hydrogen (iii) Downstream products depending on the usage for ammonia, urea, methanol, etc. During the quarter we announced our partnership with TotalEnergies to develop the world’s largest green H2 ecosystem. TotalEnergies will acquire 25% stake in ANIL. While thetransaction will follow customary approval process, it takes the company one step ahead to produce the world’s least expensive electrons which will drive our ability to produce the world’s least expensive green hydrogen. Following are some of the updates on development: Existing capacity of 1.5 GW at Mundra is increasing to 3.5 GW and this additional 2 GW will be completed by September this year. With this the overall capacity will reach to 3.5 GW. Wind turbine erection for the first 5.2 MW wind turbine has been completed and testing and certification is underway. We expect completion in the next 6 months. We have identified three trial sites for initial testing of electrolyzers and we expect the testing to commence by end of this calendar year or early next year. From operational point of view, module sales from our manufacturing ecosystem within ANIL stood at 264 MW. EBITDA from these sales was at Rs. 42 Crores.'],
-        'Partnership with TotalEnergies': ['Let me give you a quick update of our incubating businesses. In Adani New Industry portfolio as all of you would know we have announced investment of USD 50 billion over the next decade in developing green hydrogen ecosystem. This will be housed under Adani New Industry Limited. ANIL will have three business streams — (i) Manufacturing ecosystem to include module, cell, ingots, wafers and wind turbines, electrolyzers and associated ancillary equipment ecosystem. (ii) The green hydrogen generation include development of solar and wind power plants to produce green hydrogen (iii) Downstream products depending on the usage for ammonia, urea, methanol, etc. During the quarter we announced our partnership with TotalEnergies to develop the world’s largest green H2 ecosystem. TotalEnergies will acquire 25% stake in ANIL. While thetransaction will follow customary approval process, it takes the company one step ahead to produce the world’s least expensive electrons which will drive our ability to produce the world’s least expensive green hydrogen. Following are some of the updates on development: Existing capacity of 1.5 GW at Mundra is increasing to 3.5 GW and this additional 2 GW will be completed by September this year. With this the overall capacity will reach to 3.5 GW. Wind turbine erection for the first 5.2 MW wind turbine has been completed and testing and certification is underway. We expect completion in the next 6 months. We have identified three trial sites for initial testing of electrolyzers and we expect the testing to commence by end of this calendar year or early next year. From operational point of view, module sales from our manufacturing ecosystem within ANIL stood at 264 MW. EBITDA from these sales was at Rs. 42 Crores.'],
-        'Financial Performance': ['A quick update of primary industries before I handover to my colleague Vinay. We achieved financial closure for our first metals business copper. This was led by SBI and it has been further down sold to various other banks. Financial performance of AEL for this quarter in terms of revenue number has increased 223% and now is at Rs.41066 Crores. Consolidated EBITDA increased by over 100% and is at Rs.1965 Crores with strong performance from both established and incubating businesses. Now I invite my colleague Vinay to take you through mining services and IRM business highlights. Vinay over to you!'],
-        'Business Highlights': ['A quick update of primary industries before I handover to my colleague Vinay. We achieved financial closure for our first metals business copper. This was led by SBI and it has been further down sold to various other banks. Financial performance of AEL for this quarter in terms of revenue number has increased 223% and now is at Rs.41066 Crores. Consolidated EBITDA increased by over 100% and is at Rs.1965 Crores with strong performance from both established and incubating businesses. Now I invite my colleague Vinay to take you through mining services and IRM business highlights. Vinay over to you!','Thanks Robbie. Good Morning to all. In fact as far as the mining services business is concerned Adani Enterprise Limited is the pioneer of MDO concept in India with an integrated business model that spans across developing mines as well as the entire upstream and downstream activities. It provides the full service range - right from seeking various approvals, land acquisition, R&R, developing required infrastructure, mining, beneficiation and transportation to designated consumption plants. The company is also MDO for nine coal blocks and two iron ore blocks with combined peak capacity of 120 MMT per annum. These 11 projects are located in the state of Chhattisgarh, MP and Odisha. The mining production volume increased by 72% to 8.1 MMT on year-on-year basis and further dispatch increased by 58% to 7.2 MMT on year-on- year basis. The revenue from mining services increased by 18% to Rs. 677 Crores and EBITDA stood at Rs. 268 Crores versus Rs. 307 Cores on year-on-year basis on account of high operating costs. As Robbie told about copper business apart from financial closure, operational activities are progressing well and it is as per schedule. Additionally, we have also received PLI scheme approval for copper tube value added scheme for our copper business. As far as the IRM business is concerned, in terms of IRM business we have continued to develop business relationship withdiversified customers across various end-user industries. We retained number one player position in India and having the endeavor to maintain this position going forward. The volume in Q1 FY23 increased by 52% to 26.7 MMT, the EBITDA has increased by 72% to Rs.950 Crores on account of higher volumes. Thank you.'],
-        'Mining Services Business': ['A quick update of primary industries before I handover to my colleague Vinay. We achieved financial closure for our first metals business copper. This was led by SBI and it has been further down sold to various other banks. Financial performance of AEL for this quarter in terms of revenue number has increased 223% and now is at Rs.41066 Crores. Consolidated EBITDA increased by over 100% and is at Rs.1965 Crores with strong performance from both established and incubating businesses. Now I invite my colleague Vinay to take you through mining services and IRM business highlights. Vinay over to you!','Thanks Robbie. Good Morning to all. In fact as far as the mining services business is concerned Adani Enterprise Limited is the pioneer of MDO concept in India with an integrated business model that spans across developing mines as well as the entire upstream and downstream activities. It provides the full service range - right from seeking various approvals, land acquisition, R&R, developing required infrastructure, mining, beneficiation and transportation to designated consumption plants. The company is also MDO for nine coal blocks and two iron ore blocks with combined peak capacity of 120 MMT per annum. These 11 projects are located in the state of Chhattisgarh, MP and Odisha. The mining production volume increased by 72% to 8.1 MMT on year-on-year basis and further dispatch increased by 58% to 7.2 MMT on year-on- year basis. The revenue from mining services increased by 18% to Rs. 677 Crores and EBITDA stood at Rs. 268 Crores versus Rs. 307 Cores on year-on-year basis on account of high operating costs. As Robbie told about copper business apart from financial closure, operational activities are progressing well and it is as per schedule. Additionally, we have also received PLI scheme approval for copper tube value added scheme for our copper business. As far as the IRM business is concerned, in terms of IRM business we have continued to develop business relationship withdiversified customers across various end-user industries. We retained number one player position in India and having the endeavor to maintain this position going forward. The volume in Q1 FY23 increased by 52% to 26.7 MMT, the EBITDA has increased by 72% to Rs.950 Crores on account of higher volumes. Thank you.'],
-        'Copper Business': ['A quick update of primary industries before I handover to my colleague Vinay. We achieved financial closure for our first metals business copper. This was led by SBI and it has been further down sold to various other banks. Financial performance of AEL for this quarter in terms of revenue number has increased 223% and now is at Rs.41066 Crores. Consolidated EBITDA increased by over 100% and is at Rs.1965 Crores with strong performance from both established and incubating businesses. Now I invite my colleague Vinay to take you through mining services and IRM business highlights. Vinay over to you!','Thanks Robbie. Good Morning to all. In fact as far as the mining services business is concerned Adani Enterprise Limited is the pioneer of MDO concept in India with an integrated business model that spans across developing mines as well as the entire upstream and downstream activities. It provides the full service range - right from seeking various approvals, land acquisition, R&R, developing required infrastructure, mining, beneficiation and transportation to designated consumption plants. The company is also MDO for nine coal blocks and two iron ore blocks with combined peak capacity of 120 MMT per annum. These 11 projects are located in the state of Chhattisgarh, MP and Odisha. The mining production volume increased by 72% to 8.1 MMT on year-on-year basis and further dispatch increased by 58% to 7.2 MMT on year-on- year basis. The revenue from mining services increased by 18% to Rs. 677 Crores and EBITDA stood at Rs. 268 Crores versus Rs. 307 Cores on year-on-year basis on account of high operating costs. As Robbie told about copper business apart from financial closure, operational activities are progressing well and it is as per schedule. Additionally, we have also received PLI scheme approval for copper tube value added scheme for our copper business. As far as the IRM business is concerned, in terms of IRM business we have continued to develop business relationship withdiversified customers across various end-user industries. We retained number one player position in India and having the endeavor to maintain this position going forward. The volume in Q1 FY23 increased by 52% to 26.7 MMT, the EBITDA has increased by 72% to Rs.950 Crores on account of higher volumes. Thank you.']
-    }
-#     final_answers_dict={
-#         'Mining Operations': ['As I told last time also in PEKB mine considering that we are getting higher cost because of the diesel explosive and the stripping ratio, our EBITDA has gone down slightly and we are working on various other technology initiatives to see as how we can recover it back. In fact in this volume the volume of Talabira and other mines have also included where we have lower revenue because of having lower scope and considering the mining cost per tonne is lower and definitely the EBITDA per tonne is also lower in those mines. As far as the increase in volumes are concerned we are working on both the sites trying to see if we can have alternate fuels to be used apart from going for the electric equipments and some technology changes. We are confident that we will be in position to increase the EBIDTA level going further.','So just to give an idea that we have done one million metric tonnes of sales in Carmichael mines this quarter with EBITDA of about Rs. 85 Crores is what we had.'],
-#         'EBITDA Ramp Up': ['As I told last time also in PEKB mine considering that we are getting higher cost because of the diesel explosive and the stripping ratio, our EBITDA has gone down slightly and we are working on various other technology initiatives to see as how we can recover it back. In fact in this volume the volume of Talabira and other mines have also included where we have lower revenue because of having lower scope and considering the mining cost per tonne is lower and definitely the EBITDA per tonne is also lower in those mines. As far as the increase in volumes are concerned we are working on both the sites trying to see if we can have alternate fuels to be used apart from going for the electric equipments and some technology changes. We are confident that we will be in position to increase the EBIDTA level going further.','So just to give an idea that we have done one million metric tonnes of sales in Carmichael mines this quarter with EBITDA of about Rs. 85 Crores is what we had.','Basically the ramp up of the business is related to what our final targets to achieve the cheapest electron for production of green hydrogen. We will have in phase one a capacity of 10 gigawatt from all the way from polysilicon to ingots, wafer and cell and module line. We will also have initial capacity of 2.5 gigawatt of wind turbines which will also scale up to 7.5 and we will also have capacity for electrolyzers plus glass aluminum frames and back sheet, so this whole ecosystem is to provide inputs into the production of cheapest electron so that we can convert that to the cheapest hydrogen. So, the scale up will be related to how we are developing and we expect the first production of hydrogen to commence late calendar year 2025 or first quarter of calendar year of 2026 so that is the ramp up schedule that we are working towards. The polysilicon should be full 10 gigawatts to start off because that is the minimal scale of its economics.','See the best way to explain the airport business is that we look at airports as hyperlocalized community economic assets which is that primarily the airport is an economic center for a regional area in which it is be it Jaipur, be it Ahmedabad, be it Lucknow, Navi Mumbai, Mumbai. So number one, we have a plan which we call the city side planning and the city side planning is purely catering to its local community so that is one. Second is related to passenger activity and associated activities which is related to aero and non aero income at the airports, There are three income streams, the city economic area activity and the passenger aero and non- aero activity, so we expect to complete our first phase of our city side which is non-passenger related but city side developments by first phase it should be completed by 2026 and fully completed by 2030 across our eight airport sites. Because it is so far out and those are the numbers not formally presented because of the period of which they are forecast overall thestructure would work is the city side developments or local economic area should give us about 55% to 60% of our EBITDA and aero and non-aero should give us the other 40% EBIDTA of the business so I would not, till we formally start reporting on Adani Airport Holding as a business unit which we will shortly. We do not want to hazard unverified forecast for the airport business per se. This year though airports achieved just to give you a passenger movement of about 16.6 million this quarter and cargo of about 2.3 lakh metric tonnes and broadly we achieved approximately Rs.540 Crores of EBITDA that we achieved from the airport business this quarter, but this is without any income coming yet from the city side economic developments which will commence about three years from now.'],
-#         'Mines to be opened': ['So we have few mines which should get opened in the next 24 months like Parsa is ready to get opened subject to certain local approvals we should open that mine soon. We have Suliyari mine which is now going to go for its peak capacity. We have Talabira mine which did 7 million tonne last year should do 12 million tonne this year and going forward should reach to its peak capacity which is 20 million tonne. We have other commercial mines like Dhirauli and Bijahan which should also come on board.','So just to give an idea that we have done one million metric tonnes of sales in Carmichael mines this quarter with EBITDA of about Rs. 85 Crores is what we had.'],
-#         'Timeline for opening': ['So we have few mines which should get opened in the next 24 months like Parsa is ready to get opened subject to certain local approvals we should open that mine soon. We have Suliyari mine which is now going to go for its peak capacity. We have Talabira mine which did 7 million tonne last year should do 12 million tonne this year and going forward should reach to its peak capacity which is 20 million tonne. We have other commercial mines like Dhirauli and Bijahan which should also come on board.','It is 2023 and 2024 but of this Rs.85000 approximately like about Rs.7000 Crores to Rs.8000 Crores which we have already spent on our manufacturing ecosystem it is already spent. It will just be completed this year part of it. From an outlay perspective it is completing in FY2023 just as to give break up for you so that you see that airports will be about Rs.11000 Crores this year, roads would be around Rs.8900, we will have in the copper about Rs.2900, data center small amount Rs.300 odd Crores and in our other materials businesses around Rs.4400 Crores and that will be Rs.37000 odd Crores of which as I mentioned approximately Rs.8500 is already spent in the previous year completing this year and the following year in 2024 we expect to have another Rs.48000 Crores of capex.','See the best way to explain the airport business is that we look at airports as hyperlocalized community economic assets which is that primarily the airport is an economic center for a regional area in which it is be it Jaipur, be it Ahmedabad, be it Lucknow, Navi Mumbai, Mumbai. So number one, we have a plan which we call the city side planning and the city side planning is purely catering to its local community so that is one. Second is related to passenger activity and associated activities which is related to aero and non aero income at the airports, There are three income streams, the city economic area activity and the passenger aero and non- aero activity, so we expect to complete our first phase of our city side which is non-passenger related but city side developments by first phase it should be completed by 2026 and fully completed by 2030 across our eight airport sites. Because it is so far out and those are the numbers not formally presented because of the period of which they are forecast overall thestructure would work is the city side developments or local economic area should give us about 55% to 60% of our EBITDA and aero and non-aero should give us the other 40% EBIDTA of the business so I would not, till we formally start reporting on Adani Airport Holding as a business unit which we will shortly. We do not want to hazard unverified forecast for the airport business per se. This year though airports achieved just to give you a passenger movement of about 16.6 million this quarter and cargo of about 2.3 lakh metric tonnes and broadly we achieved approximately Rs.540 Crores of EBITDA that we achieved from the airport business this quarter, but this is without any income coming yet from the city side economic developments which will commence about three years from now.'],'Carmichael and PO Trading Business': ['I think this IRM business is independent of Carmichael business, Mr. Shah will like to comment here but this IRM is excluding Carmichael.','So just to give an idea that we have done one million metric tonnes of sales in Carmichael mines this quarter with EBITDA of about Rs. 85 Crores is what we had.'],
-#         'PLI Scheme': ['That is continuing. We are not doing this business for PLI scheme. I think we should keep the focus on the fact the Adani New Industries is setting up green hydrogen ecosystem. Now if the PLI scheme happen it would be wonderful because that is part of Atmanirbhar programme of the government and it will benefit us but independent of that, it is a specific opportunity for India to finally have an energy source that is domestic and therefore it has its own economic merits. Having said that if you can kindly frame the questions in relation to that manner it is much, much better.'],
-#         'Solar Manufacturing Business': ['Basically the ramp up of the business is related to what our final targets to achieve the cheapest electron for production of green hydrogen. We will have in phase one a capacity of 10 gigawatt from all the way from polysilicon to ingots, wafer and cell and module line. We will also have initial capacity of 2.5 gigawatt of wind turbines which will also scale up to 7.5 and we will also have capacity for electrolyzers plus glass aluminum frames and back sheet, so this whole ecosystem is to provide inputs into the production of cheapest electron so that we can convert that to the cheapest hydrogen. So, the scale up will be related to how we are developing and we expect the first production of hydrogen to commence late calendar year 2025 or first quarter of calendar year of 2026 so that is the ramp up schedule that we are working towards. The polysilicon should be full 10 gigawatts to start off because that is the minimal scale of its economics.','The solar business is not the business that we look at in isolation. We look at is an integrated part of the green hydrogen ecosystem so there is no specific target that we want to achieve for thesolar business. We want to achieve the target for green hydrogen per kg so that is the matrix that we are focused on.'],
-#         'Electrolyzer Technology': ['No, we are working on that. As I mentioned we are currently in the process of starting the testing programme for electrolyzer and parallel to that we are continuing to work on partnerships. But it is a dual track process both partnerships and indigenous capacity.','That is the configuration we are testing so we are going through as to what and how the configuration of best operating configuration works to give the cheapest hydrogen given a power input profile and so therefore we are going to be testing the electrolyzer purely at a wind power site, purely at solar site and a hybrid wind and solar site so we will complete that parallelly to then come up with the best design configuration under which the optimal hydrogen can be produced at an optimal cost so that we are in the process of doing. Once it is done we will continue to disclose it to the market as to how we are doing, but at this stage in phase one of the analysis it does not rely on battery for storage.'],
-#         'Technology for Power Storage': ['That is the configuration we are testing so we are going through as to what and how the configuration of best operating configuration works to give the cheapest hydrogen given a power input profile and so therefore we are going to be testing the electrolyzer purely at a wind power site, purely at solar site and a hybrid wind and solar site so we will complete that parallelly to then come up with the best design configuration under which the optimal hydrogen can be produced at an optimal cost so that we are in the process of doing. Once it is done we will continue to disclose it to the market as to how we are doing, but at this stage in phase one of the analysis it does not rely on battery for storage.'],
-#         'Hydrogen Pipeline Construction': ['Basically the ramp up of the business is related to what our final targets to achieve the cheapest electron for production of green hydrogen. We will have in phase one a capacity of 10 gigawatt from all the way from polysilicon to ingots, wafer and cell and module line. We will also have initial capacity of 2.5 gigawatt of wind turbines which will also scale up to 7.5 and we will also have capacity for electrolyzers plus glass aluminum frames and back sheet, so this whole ecosystem is to provide inputs into the production of cheapest electron so that we can convert that to the cheapest hydrogen. So, the scale up will be related to how we are developing and we expect the first production of hydrogen to commence late calendar year 2025 or first quarter of calendar year of 2026 so that is the ramp up schedule that we are working towards. The polysilicon should be full 10 gigawatts to start off because that is the minimal scale of its economics.','That is the configuration we are testing so we are going through as to what and how the configuration of best operating configuration works to give the cheapest hydrogen given a power input profile and so therefore we are going to be testing the electrolyzer purely at a wind power site, purely at solar site and a hybrid wind and solar site so we will complete that parallelly to then come up with the best design configuration under which the optimal hydrogen can be produced at an optimal cost so that we are in the process of doing. Once it is done we will continue to disclose it to the market as to how we are doing, but at this stage in phase one of the analysis it does not rely on battery for storage.','The pipeline is not a big cost. Pipeline is very, very small cost of the overall project but the right of way and all that analysis is being completed and it is only about 200 KMs so it is not a very long pipeline so we expect that to be ready and complete.'],
-#         'Capital Cost Expectations': ['From equity point of view for the time being we are fully funded. We did already in advance. From time-to-time we might look at appropriately funding various businesses but the bulk we completed that in May with IHC Rs.7700 Crores and overall from just pure capex perspective we expect the capex commitments over the next two years to be in the order for AEL of give or take about Rs.85000 Crores and including revenue plus EPC margin plus internal cash flows and already funded equity that is fully covered in our current planning so we do not anticipate any new equity for the already identified projects.','It is 2023 and 2024 but of this Rs.85000 approximately like about Rs.7000 Crores to Rs.8000 Crores which we have already spent on our manufacturing ecosystem it is already spent. It will just be completed this year part of it. From an outlay perspective it is completing in FY2023 just as to give break up for you so that you see that airports will be about Rs.11000 Crores this year, roads would be around Rs.8900, we will have in the copper about Rs.2900, data center small amount Rs.300 odd Crores and in our other materials businesses around Rs.4400 Crores and that will be Rs.37000 odd Crores of which as I mentioned approximately Rs.8500 is already spent in the previous year completing this year and the following year in 2024 we expect to have another Rs.48000 Crores of capex.'],
-#         'Capital Requirements': ['From equity point of view for the time being we are fully funded. We did already in advance. From time-to-time we might look at appropriately funding various businesses but the bulk we completed that in May with IHC Rs.7700 Crores and overall from just pure capex perspective we expect the capex commitments over the next two years to be in the order for AEL of give or take about Rs.85000 Crores and including revenue plus EPC margin plus internal cash flows and already funded equity that is fully covered in our current planning so we do not anticipate any new equity for the already identified projects.'],
-#         'Equity Side': ['From equity point of view for the time being we are fully funded. We did already in advance. From time-to-time we might look at appropriately funding various businesses but the bulk we completed that in May with IHC Rs.7700 Crores and overall from just pure capex perspective we expect the capex commitments over the next two years to be in the order for AEL of give or take about Rs.85000 Crores and including revenue plus EPC margin plus internal cash flows and already funded equity that is fully covered in our current planning so we do not anticipate any new equity for the already identified projects.'],
-#         'Revenue Trajectory': ['See the best way to explain the airport business is that we look at airports as hyperlocalized community economic assets which is that primarily the airport is an economic center for a regional area in which it is be it Jaipur, be it Ahmedabad, be it Lucknow, Navi Mumbai, Mumbai. So number one, we have a plan which we call the city side planning and the city side planning is purely catering to its local community so that is one. Second is related to passenger activity and associated activities which is related to aero and non aero income at the airports, There are three income streams, the city economic area activity and the passenger aero and non- aero activity, so we expect to complete our first phase of our city side which is non-passenger related but city side developments by first phase it should be completed by 2026 and fully completed by 2030 across our eight airport sites. Because it is so far out and those are the numbers not formally presented because of the period of which they are forecast overall thestructure would work is the city side developments or local economic area should give us about 55% to 60% of our EBITDA and aero and non-aero should give us the other 40% EBIDTA of the business so I would not, till we formally start reporting on Adani Airport Holding as a business unit which we will shortly. We do not want to hazard unverified forecast for the airport business per se. This year though airports achieved just to give you a passenger movement of about 16.6 million this quarter and cargo of about 2.3 lakh metric tonnes and broadly we achieved approximately Rs.540 Crores of EBITDA that we achieved from the airport business this quarter, but this is without any income coming yet from the city side economic developments which will commence about three years from now.'],
-#         'EBITDA Trajectory': ['As I told last time also in PEKB mine considering that we are getting higher cost because of the diesel explosive and the stripping ratio, our EBITDA has gone down slightly and we are working on various other technology initiatives to see as how we can recover it back. In fact in this volume the volume of Talabira and other mines have also included where we have lower revenue because of having lower scope and considering the mining cost per tonne is lower and definitely the EBITDA per tonne is also lower in those mines. As far as the increase in volumes are concerned we are working on both the sites trying to see if we can have alternate fuels to be used apart from going for the electric equipments and some technology changes. We are confident that we will be in position to increase the EBIDTA level going further.','So just to give an idea that we have done one million metric tonnes of sales in Carmichael mines this quarter with EBITDA of about Rs. 85 Crores is what we had.','See the best way to explain the airport business is that we look at airports as hyperlocalized community economic assets which is that primarily the airport is an economic center for a regional area in which it is be it Jaipur, be it Ahmedabad, be it Lucknow, Navi Mumbai, Mumbai. So number one, we have a plan which we call the city side planning and the city side planning is purely catering to its local community so that is one. Second is related to passenger activity and associated activities which is related to aero and non aero income at the airports, There are three income streams, the city economic area activity and the passenger aero and non- aero activity, so we expect to complete our first phase of our city side which is non-passenger related but city side developments by first phase it should be completed by 2026 and fully completed by 2030 across our eight airport sites. Because it is so far out and those are the numbers not formally presented because of the period of which they are forecast overall thestructure would work is the city side developments or local economic area should give us about 55% to 60% of our EBITDA and aero and non-aero should give us the other 40% EBIDTA of the business so I would not, till we formally start reporting on Adani Airport Holding as a business unit which we will shortly. We do not want to hazard unverified forecast for the airport business per se. This year though airports achieved just to give you a passenger movement of about 16.6 million this quarter and cargo of about 2.3 lakh metric tonnes and broadly we achieved approximately Rs.540 Crores of EBITDA that we achieved from the airport business this quarter, but this is without any income coming yet from the city side economic developments which will commence about three years from now.'],
-#         'Real Estate Monetization': ['We do not look at this as real estate monetization; there is no monetization of real estate. It is actually what you are building for the local community and how the local community spends within the airport region so it is not specifically like trying to monetize the land and trying to undertake that kind of activity it is more related to what is needed in the specific local community you build facilities for that community and then you are earning income from that built capacity so it will depend from city-by-city. It is more of a consumer centric model rather than a model that is related to monetization of land, etc.'],
-#         'City Side Development': ['See the best way to explain the airport business is that we look at airports as hyperlocalized community economic assets which is that primarily the airport is an economic center for a regional area in which it is be it Jaipur, be it Ahmedabad, be it Lucknow, Navi Mumbai, Mumbai. So number one, we have a plan which we call the city side planning and the city side planning is purely catering to its local community so that is one. Second is related to passenger activity and associated activities which is related to aero and non aero income at the airports, There are three income streams, the city economic area activity and the passenger aero and non- aero activity, so we expect to complete our first phase of our city side which is non-passenger related but city side developments by first phase it should be completed by 2026 and fully completed by 2030 across our eight airport sites. Because it is so far out and those are the numbers not formally presented because of the period of which they are forecast overall thestructure would work is the city side developments or local economic area should give us about 55% to 60% of our EBITDA and aero and non-aero should give us the other 40% EBIDTA of the business so I would not, till we formally start reporting on Adani Airport Holding as a business unit which we will shortly. We do not want to hazard unverified forecast for the airport business per se. This year though airports achieved just to give you a passenger movement of about 16.6 million this quarter and cargo of about 2.3 lakh metric tonnes and broadly we achieved approximately Rs.540 Crores of EBITDA that we achieved from the airport business this quarter, but this is without any income coming yet from the city side economic developments which will commence about three years from now.'],
-#         'Polysilicon prices': ['Basically the ramp up of the business is related to what our final targets to achieve the cheapest electron for production of green hydrogen. We will have in phase one a capacity of 10 gigawatt from all the way from polysilicon to ingots, wafer and cell and module line. We will also have initial capacity of 2.5 gigawatt of wind turbines which will also scale up to 7.5 and we will also have capacity for electrolyzers plus glass aluminum frames and back sheet, so this whole ecosystem is to provide inputs into the production of cheapest electron so that we can convert that to the cheapest hydrogen. So, the scale up will be related to how we are developing and we expect the first production of hydrogen to commence late calendar year 2025 or first quarter of calendar year of 2026 so that is the ramp up schedule that we are working towards. The polysilicon should be full 10 gigawatts to start off because that is the minimal scale of its economics.'],
-#         'Ramp up': ['Basically the ramp up of the business is related to what our final targets to achieve the cheapest electron for production of green hydrogen. We will have in phase one a capacity of 10 gigawatt from all the way from polysilicon to ingots, wafer and cell and module line. We will also have initial capacity of 2.5 gigawatt of wind turbines which will also scale up to 7.5 and we will also have capacity for electrolyzers plus glass aluminum frames and back sheet, so this whole ecosystem is to provide inputs into the production of cheapest electron so that we can convert that to the cheapest hydrogen. So, the scale up will be related to how we are developing and we expect the first production of hydrogen to commence late calendar year 2025 or first quarter of calendar year of 2026 so that is the ramp up schedule that we are working towards. The polysilicon should be full 10 gigawatts to start off because that is the minimal scale of its economics.'],
-#         'Upgrade/Maintain': ['We are maintaining this 40 million tonne for this year and for the next year 65 to 75 million tonne depending upon the timing of various approvals.']
-#     }
-
-    final_discussion_summary= get_refined_document_summary(final_discussion_dict,llm_model)
-#     final_answers_summary= get_refined_document_summary(final_answers_dict,llm_model,e5_embedding_model)
-#     final_discussion_summary.update(final_answers_summary)
+    indigo_discussion_summary= get_overall_document_summary(llm_model,indigo_discussion_data)
     print("Completed")
-    print(final_discussion_summary)
+    print(indigo_discussion_summary)
 
 main()
