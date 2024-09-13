@@ -20,7 +20,7 @@ def load_llama_model():
     ''' Load llama model from the local folder'''
     try:
         logging.info("llama model loading")
-        hf_token="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"
+        hf_token="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"
         subprocess.run(f'huggingface-cli login --token={hf_token}',shell=True)
         model_path= os.path.join("model")
         model_pipe = pipeline(task="text-generation", model = model_path,tokenizer= model_path,device_map="auto")
