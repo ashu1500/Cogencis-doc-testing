@@ -39,11 +39,17 @@ def get_chunk_summary(llm,input_text):
     ''' Get summary of each chunk'''
     try:
         template = """
-                    Write a concise summary of the following text delimited by triple backquotes.
-                    Return your response in a paragraph in 1000 words.
-                    ```{text}```
-                    SUMMARY:
-                 """
+        Write a concise summary of the following text, which is delimited by triple backquotes:
+        - The summary must strictly contain only factual information present in the text.
+        - Avoid adding any information that is not explicitly mentioned in the text.
+        - The summary should be in a single, continuous paragraph, and must avoid bullet points, lists, or names.
+        - Use third-person language (e.g., 'they', 'their') and avoid first-person pronouns like 'we', 'our', or 'us'.
+        - Do not include any kind of emojis, asterisks, or symbols.
+        - Make sure the summary flows logically from start to end.
+        - Do not interpret, analyze, or infer any content; only summarize the given text.
+        ```{text}```
+        SUMMARY:
+        """
         prompt = PromptTemplate(template=template, input_variables=["text"])
         llm_chain = prompt | llm
         text_summary= llm_chain.invoke(input_text)
