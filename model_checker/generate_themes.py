@@ -50,44 +50,78 @@ def extract_summary_section_perchunk(text):
         raise ex
 
 
+def clean_summary(summary):
+    ''' Remove instruction-like content from the summary '''
+    # Simple heuristic: remove any sentence that refers to writing a summary or following instructions
+    instruction_phrases = [
+        r"task of writing the summary",
+        r"asked to write a concise summary",
+        r"delimited by triple backquotes",
+        r"avoid adding any information",
+        r"must strictly contain",
+        r"do not include any kind"
+    ]
+    
+    for phrase in instruction_phrases:
+        summary = re.sub(rf".*{phrase}.*", "", summary, flags=re.IGNORECASE)
+    
+    # Return cleaned summary
+    return summary.strip()
+
+
 #OVERALL DOCUMENT SUMMARY
-def get_chunk_summary(llm,text):
-    ''' Get summary of each chunk'''
+def get_chunk_summary(llm, text):
+    ''' Get summary of each chunk '''
     try:
         template = """
-        Write a concise summary of the following text, which is delimited by triple backquotes:
-        - The summary must strictly contain only factual information present in the text.
-        - Avoid adding any information that is not explicitly mentioned in the text.
-        - The summary should be in a single, continuous paragraph, and must avoid bullet points, lists, or names.
-        - Use third-person language (e.g., 'they', 'their') and avoid first-person pronouns like 'we', 'our', or 'us'.
-        - Do not include any kind of headers, emojis, asterisks, symbols, requests, questions, or instructions in the summary.
-        - Do not include any introductory or closing statements such as "I have written" or "let me know if it meets your requirements." Only output the summary itself.
-        - Ensure the summary flows logically from start to end.
-        - Do not interpret, analyze, or infer any content; only summarize the given text.
-        - Do not include any note or instructions in the summary.
+        You are tasked with summarizing the following text, which is delimited by triple backquotes:
+        - Do not include any kind of headers, emojis, asterisks, symbols, requests, questions, instructions, or explanations in the summary.
+        - The summary must only include factual information from the text.
+        - Avoid restating any part of these instructions in the summary.
         ```{text}```
         SUMMARY:
         """
+        
+        # Create the prompt
         prompt = PromptTemplate(template=template, input_variables=["text"])
-        text_summary = llm.generate([prompt.format(text=text)])
-        chunk_summary= extract_summary_section_perchunk(text_summary.generations[0][0].text)
+        formatted_prompt = prompt.format(text=text)
+        
+        # Get the response from the language model
+        text_summary = llm.generate([formatted_prompt])
+        
+        # Extract the summary
+        chunk_summary = text_summary.generations[0][0].text
+        
+        # Clean any instruction-like content from the summary
+        chunk_summary = clean_summary(chunk_summary)
+        
         return chunk_summary
-    except Exception as e:
-        print(e)
-        raise e     
 
-def get_overall_document_summary(llm_model,chunk_list):
-    ''' Get overall summary of the document'''
+    except Exception as e:
+        print(f"Error generating summary: {e}")
+        raise e
+   
+def get_overall_document_summary(llm_model, chunk_list):
+    ''' Get overall summary of the document '''
     try:
-        overall_summary=""
+        overall_summary = []
+        
         for text_chunk in chunk_list:
             print("Chunk summary started")
-            summary= get_chunk_summary(llm_model,text_chunk)
-            overall_summary+= summary.strip()
+            summary = get_chunk_summary(llm_model, text_chunk)
+            overall_summary.append(summary.strip())  # Append cleaned summary
             print("Chunk summary generated")
-        return overall_summary
+        
+        # Join all chunk summaries with a space separating them
+        final_summary = " ".join(overall_summary)
+        
+        # Final cleaning step to remove any lingering instruction-like content
+        final_summary = clean_summary(final_summary)
+        
+        return final_summary
+    
     except Exception as e:
-        print(e)
+        print(f"Error generating overall summary: {e}")
         raise e
 
 
