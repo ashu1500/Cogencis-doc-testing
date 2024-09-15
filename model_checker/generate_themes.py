@@ -78,7 +78,7 @@ def get_chunk_summary(llm, text):
         Write a concise summary of the following text, which is delimited by triple backquotes:
         - The summary must strictly contain only factual information present in the text.
         - Avoid adding any information that is not explicitly mentioned in the text.
-        - The summary should be in a single, continuous paragraph and must avoid bullet points, lists, or names.
+        - The summary must only be in a single, continuous paragraph and must avoid bullet points, lists, or names.
         - Use third-person language (e.g., 'they', 'their') and avoid first-person pronouns like 'we', 'our', or 'us'.
         - Do not include any kind of headers, emojis, asterisks, symbols, requests, questions, or instructions in the summary.
         - Do not include any introductory or closing statements such as "I have written" or "let me know if it meets your requirements." Only output the summary itself.
