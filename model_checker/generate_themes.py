@@ -35,7 +35,7 @@ def load_llama_model():
 llm_model= load_llama_model()
 
 #OVERALL DOCUMENT SUMMARY
-def get_chunk_summary(llm,input_text):
+def get_chunk_summary(llm,text):
     ''' Get summary of each chunk'''
     try:
         template = """
@@ -52,8 +52,7 @@ def get_chunk_summary(llm,input_text):
         SUMMARY:
         """
         prompt = PromptTemplate(template=template, input_variables=["text"])
-        llm_chain = prompt | llm
-        text_summary= llm_chain.invoke(input_text)
+        text_summary = llm.generate([prompt.format(text=text)])
         summary_parts= text_summary.split('SUMMARY:\n',1)
         chunk_summary=summary_parts[1].strip()
         return chunk_summary
