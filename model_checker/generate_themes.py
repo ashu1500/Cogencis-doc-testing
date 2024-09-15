@@ -73,16 +73,24 @@ def clean_summary(summary):
 def get_chunk_summary(llm, text):
     ''' Get summary of each chunk '''
     try:
+        # Updated prompt template with clear rules about generating only a factual, single-paragraph summary
         template = """
-        You are tasked with summarizing the following text, which is delimited by triple backquotes:
-        - Do not include any kind of headers, emojis, asterisks, symbols, requests, questions, instructions, or explanations in the summary.
-        - The summary must only include factual information from the text.
+        Write a concise summary of the following text, which is delimited by triple backquotes:
+        - The summary must strictly contain only factual information present in the text.
+        - Avoid adding any information that is not explicitly mentioned in the text.
+        - The summary should be in a single, continuous paragraph and must avoid bullet points, lists, or names.
+        - Use third-person language (e.g., 'they', 'their') and avoid first-person pronouns like 'we', 'our', or 'us'.
+        - Do not include any kind of headers, emojis, asterisks, symbols, requests, questions, or instructions in the summary.
+        - Do not include any introductory or closing statements such as "I have written" or "let me know if it meets your requirements." Only output the summary itself.
+        - Ensure the summary flows logically from start to end.
+        - Do not interpret, analyze, or infer any content; only summarize the given text.
+        - Do not include any note or instructions in the summary.
         - Avoid restating any part of these instructions in the summary.
         ```{text}```
         SUMMARY:
         """
         
-        # Create the prompt
+        # Create the prompt using the template
         prompt = PromptTemplate(template=template, input_variables=["text"])
         formatted_prompt = prompt.format(text=text)
         
@@ -90,16 +98,17 @@ def get_chunk_summary(llm, text):
         text_summary = llm.generate([formatted_prompt])
         
         # Extract the summary
-        chunk_summary = extract_summary_section_perchunk(text_summary.generations[0][0].text)
+        chunk_summary = extract_summary_section_perchunk(text_summary.generations[0][0].text.strip())
         
         # Clean any instruction-like content from the summary
-        chunk_summary = clean_summary(chunk_summary)
+        cleaned_summary = clean_summary(chunk_summary)
         
-        return chunk_summary
+        return cleaned_summary
 
     except Exception as e:
         print(f"Error generating summary: {e}")
         raise e
+
    
 def get_overall_document_summary(llm_model, chunk_list):
     ''' Get overall summary of the document '''
