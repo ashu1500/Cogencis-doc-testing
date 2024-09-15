@@ -90,7 +90,7 @@ def get_chunk_summary(llm, text):
         text_summary = llm.generate([formatted_prompt])
         
         # Extract the summary
-        chunk_summary = text_summary.generations[0][0].text
+        chunk_summary = extract_summary_section_perchunk(text_summary.generations[0][0].text)
         
         # Clean any instruction-like content from the summary
         chunk_summary = clean_summary(chunk_summary)
