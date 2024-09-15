@@ -61,7 +61,8 @@ def get_chunk_summary(llm,text):
         - The summary should be in a single, continuous paragraph, and must avoid bullet points, lists, or names.
         - Use third-person language (e.g., 'they', 'their') and avoid first-person pronouns like 'we', 'our', or 'us'.
         - Do not include any kind of headers, emojis, asterisks, symbols, requests, questions, or instructions in the summary.
-        - Make sure the summary flows logically from start to end.
+        - Do not include any introductory or closing statements such as "I have written" or "let me know if it meets your requirements." Only output the summary itself.
+        - Ensure the summary flows logically from start to end.
         - Do not interpret, analyze, or infer any content; only summarize the given text.
         - Do not include any note or instructions in the summary.
         ```{text}```
