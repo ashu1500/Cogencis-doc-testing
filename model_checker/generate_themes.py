@@ -34,6 +34,22 @@ def load_llama_model():
 
 llm_model= load_llama_model()
 
+def extract_summary_section_perchunk(text):
+    """Post processing to extract summary section from the text."""
+    try:
+        keyword = "SUMMARY:"
+        keyword_pos = text.find(keyword)
+        if keyword_pos != -1:
+            summary = text[keyword_pos + len(keyword):].strip()
+            return summary
+        else:
+            print("Keyword 'SUMMARY' not found in the text.")
+            return None
+    except Exception as ex:
+        print(f"Error in extract summary section per chunk. {ex.args}")
+        raise ex
+
+
 #OVERALL DOCUMENT SUMMARY
 def get_chunk_summary(llm,text):
     ''' Get summary of each chunk'''
@@ -53,8 +69,7 @@ def get_chunk_summary(llm,text):
         """
         prompt = PromptTemplate(template=template, input_variables=["text"])
         text_summary = llm.generate([prompt.format(text=text)])
-        summary_parts= text_summary.split('SUMMARY:\n',1)
-        chunk_summary=summary_parts[1].strip()
+        chunk_summary= extract_summary_section_perchunk(text_summary.generations[0][0].text)
         return chunk_summary
     except Exception as e:
         print(e)
