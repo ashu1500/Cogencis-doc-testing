@@ -151,11 +151,12 @@ def theme_extraction_per_chunk(chunk_text, llm):
         Key headers should be suitable as stand-alone titles and reflect complete concepts without being overly broad or incomplete.
         <</SYS>>
         Generate exactly 2 key headers from the following text. 
-        - Key headers must be strictly 3-4 words each, fully formed, and suitable as complete titles.
+        - Key headers must be 3-4 words and concise, not exceeding 4 words. They should reflect complete concepts without being full sentences.
         - Do not include company names, numbers, country names, or person names.
+        - Avoid generating full sentences, explanations, or long phrases. Focus on concise, well-defined topics that can be used as titles.
         - Avoid generating incomplete or partial comparisons (e.g., "X vs Y") or any unfinished phrases (e.g., "accounted for").
         - Do not use overly simplistic or ambiguous terms (e.g., "improves," "built").
-        - Focus on well-defined topics that fully capture the core concept without any missing information.
+        - Focus on well-defined topics that fully capture the core concept.
         text: {text}
         key headers:
         """
