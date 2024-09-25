@@ -135,6 +135,140 @@ def get_overall_document_summary(llm_model, chunk_list):
         print(f"Error generating overall summary: {e}")
         raise e
 
+def theme_extraction_per_chunk(chunk_text, llm):
+    ''' Extract themes for each chunk'''
+    try:
+        template = """<s>[INST] <<SYS>>
+        You are a helpful assistant. Generate concise and relevant key headers based on the financial information in the text.
+        Ensure the key headers are specific, contextually complete, and avoid any ambiguous or overly broad statements
+        <</SYS>>
+        Generate 2 key headers (maximum 3-4 words each) from the following text. No explanations needed and don't include company name, numbers,country names or person names in key headers.
+        text: {text}
+        key headers:
+        """
+
+        prompt = PromptTemplate(template=template, input_variables=["text"])
+        result = llm.generate([prompt.format(text=chunk_text)])
+        return result
+    except Exception as ex:
+        print(f"Error in theme extraction per chunk. {ex.args}")
+        raise ex
+
+def extract_headers_from_themes(output_text):
+    ''' Get headers list for themes'''
+    try:
+        start_index = output_text.find("key headers:")
+        themes_section = output_text[start_index:]
+        themes_lines = themes_section.split('\n')
+        themes_lines = [line.strip() for line in themes_lines[1:] if line.strip()]
+        headers_list = []
+        for theme_line in themes_lines:
+            if theme_line.strip().startswith(tuple(f"{i}." for i in range(1, 11))):
+                if ":" in theme_line:
+                    header = theme_line.split(":")[1].strip()
+                    headers_list.append(header)
+                else:
+                    header = theme_line.split(".")[1].strip()
+                    headers_list.append(header)
+
+        return headers_list
+    except Exception as ex:
+        print(f"Error in extract headers from themes. {ex.args}")
+        raise ex
+    
+def extract_headers_from_question_themes(output_text):
+    ''' Get headers list for themes'''
+    try:
+        start_index = output_text.find("key header:")
+        themes_section = output_text[start_index:]
+        themes_lines = themes_section.split('\n')
+        themes_lines = [line.strip() for line in themes_lines[1:] if line.strip()]
+        headers_list = []
+        theme_line= themes_lines[0]
+        if theme_line.strip().startswith(tuple(f"{i}." for i in range(1, 11))):
+          if ":" in theme_line:
+            header = theme_line.split(":")[1].strip()
+            headers_list.append(header)
+          else:
+            header = theme_line.split(".")[1].strip()
+            headers_list.append(header)
+        else:
+          headers_list.append(theme_line)
+
+        return headers_list
+    except Exception as ex:
+        print(f"Error in extract headers from question themes. {ex.args}")
+        raise ex
+
+def get_final_transcript_themes(llm,input_list):
+    '''Get final themes for the transcript document'''
+    try:
+        chunk_headers_list=[]
+        all_chunk_header=[]
+        actual_chunk_headers=[]
+        for items in input_list:
+            print("Theme generation")
+            chunk_txt= theme_extraction_per_chunk(items,llm)
+            chunk_header= extract_headers_from_themes(chunk_txt.generations[0][0].text)
+            chunk_headers_list.append(chunk_header)
+        for header in chunk_headers_list:
+            all_chunk_header+=header
+        print("All themes generated")
+        ls=[actual_chunk_headers.append(x) for x in all_chunk_header if x not in actual_chunk_headers]
+        final_themes= set(list(map(lambda x: str(x).title(), actual_chunk_headers)))
+        return final_themes
+        
+    except Exception as ex:
+        print(f"Error in get final transcript themes. {ex.args}")
+        raise ex
+
+
+def question_theme_extraction_per_chunk(chunk_text, llm):
+    ''' Extract themes for each chunk'''
+    try:
+        template = """<s>[INST] <<SYS>>
+        <s>[INST] <<SYS>>
+        You are a helpful, respectful, and honest assistant. Always answer as helpfully as possible, while being safe.
+        Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content.
+        Please ensure that your responses are socially unbiased and positive in nature.
+        <</SYS>>
+        Generate exactly one short and concise key header (strictly 3-4 words) relevant for financial information from the given text.No explanation needed.Do not include company name, number, or person name in the key header.The key header must be brief,meaningful and must not be a question. Avoid long phrases or sentences.
+        {text}
+        key header:
+        """
+
+        prompt = PromptTemplate(template=template, input_variables=["text"])
+        result = llm.generate([prompt.format(text=chunk_text)])
+        return result
+    except Exception as ex:
+        print(f"Error in question theme extraction per chunk. {ex.args}")
+        raise ex
+
+def get_final_question_themes(llm,input_list):
+    '''Get final themes for the transcript document'''
+    try:
+        chunk_headers_list=[]
+        all_chunk_header=[]
+        actual_chunk_headers=[]
+        for items in input_list:
+            print("Theme generation")
+            chunk_txt= question_theme_extraction_per_chunk(items,llm)
+            print("Chunk text generated")
+            chunk_header= extract_headers_from_question_themes(chunk_txt.generations[0][0].text)
+            chunk_headers_list.append(chunk_header)
+            print("Chunk header generated")
+        for header in chunk_headers_list:
+            all_chunk_header+=header
+        print("All themes generated")
+        ls=[actual_chunk_headers.append(x) for x in all_chunk_header if x not in actual_chunk_headers]
+        final_themes= set(list(map(lambda x: str(x).title(), actual_chunk_headers)))
+        return final_themes
+        
+    except Exception as ex:
+        print(f"Error in get final question themes. {ex.args}")
+        raise ex
+
+
 
 def main():
     indigo_discussion_data= ['Good evening, everyone, and thank you for joining us for the first quarter of fiscal year 2025 earnings call. We have with us our Chief Executive Officer - Pieter Elbers and our Chief Financial Officer — Gaurav Negi to discuss the financial performance and are available for the Q&A session.',
@@ -167,9 +301,22 @@ def main():
                             'We will be turning 18 soon, we are proud of the legacy that we have built, and we are carefully considering the changing needs of our customers and making product advancements accordingly. As we embark on the next chapter of our journey our robust strategy and our improved financial health will provide us with the resources to invest for the future, explore new frontiers and reach greater heights.',
                             'With this, let me hand it back to Richa.'
     ]
-    
-    indigo_discussion_summary= get_overall_document_summary(llm_model,indigo_discussion_data)
+    indigo_questions_list= ["Now just to clarify on the kind of lease this is. What I understand is if you take a damp lease, that might be for, let's say, 6 months or 1 year or 1.5 years. And you have your normal leases, which are longer term, but generally, you tend to return your aircraft in 6 to 7 years. Now when you have taken these 2 planes, what do you mean by a shorter period? Is it like 3 years, 4 years or even shorter?",
+                            'Could you repeat what you said about the recognition of operating lease versus finance lease? And how should we look at it from an accounting perspective impact on depreciation and finance line items?',
+                            'This is clear. Gaurav, my second question is again on what the previous participant asked, so in terms of whatever you have accrued so far, since there are still 70 planes which are on lease, why should the amount come off, because the maintenance related to that should also be recognized every quarter, right? So, if you could just explain how this entire compensation would work going forward?',
+                            "And just as a follow-up, have you heard anything from the regulators or the government regarding yields? Because there's been some noise in the political arena about the fares and all that. So, any follow-up from the government or the ministry concerned?",
+                            "Two questions from my side. The first one on cost. If I see your cost ex of fuel ex of forex, it's gone up by about Rs.0.30 on a Y-o-Y basis. Would the Pratt & Whitney issue be accounting fora minority share of this increase, majority or dominant share of the increase?",
+                            'Understood. So, the second question that I had was on the demand environment. The context is that maybe the top 3 airlines in India, the CEOs have basically suggested that air fares are low, both IndiGo, Akasa as well as Air India CEOs. Is the demand environment good enough for the sector to be taking price increases ahead of cost inflation in the next 12 months?',
+                            'Sure. One related follow-up is a recognition on the compensation part, which happened. So, you mentioned that there was some recognition which happened in the other operating revenue and some bit of compensation also get adjusted into the supplementary rentals part. And if I remember right, in one of your earlier calls, you had also mentioned that the income gets adjusted in the other income line item. So, can you please explain, I mean, how does the attribution basically happen to each line item?',
+                            "Right. And another bookkeeping question, your employee incentives that has been accounted for this quarter? Or is it -- it's not?",
+                            "So, first of all, in terms of yield. So, you mentioned that the next quarter yields are going to be flat year-on-year. That confuses me a bit because I think the last year, second quarter, I think the capacity was up almost 20%. And this year, you are guiding much lower capacity growth. And then yet you're expecting a yield, a flattish yield. So, I mean, could you just break it down a bit and give us a bit more colour in terms of are you sort of reducing the fares to inflate the demand? Or is it like how much of it is like underlying yield strength and how much is because of the network mix? So, what exactly happened on the yield? So, if you could break that up and then give a bit more colour, that would be helpful.",
+                            "Okay, fine. My second question is about more on the international side. So now, of course, given that you're not very far from taking XLRs' deliveries and then you are also preparing for wide bodies. So, I just want to understand in terms of taking the flight rights and especially the sixth freedom right, which is quite important since India is getting an international hub. So, how do you see them? Do you see any challenges at the moment? Have you not started preparation yet? Or are you finding it easy to get all the flying rights which you need for international operations? Could you please help on that?",
+                            'Congrats on the good results. My first question is on compensation again. So past 3 quarters has seen total cumulative compensation of Rs.2,300 crores, Rs.2,400 crores. Is this attributable cost of Rs.2,400 crores for the same 3 quarters and net spread neutral for the company as such? And maybe now the quarterly impact or compensation would be Rs.800 crores -- to the tune of Rs.800 crores going forward?'
+    ]
+    indigo_discussion_themes= get_final_transcript_themes(llm_model,indigo_discussion_data)
+    print("Discussion_themes: ",indigo_discussion_themes)
+    indigo_question_themes= get_final_question_themes(llm_model,indigo_questions_list)
+    print("Questions_themes: ",indigo_question_themes)
     print("Completed")
-    print(indigo_discussion_summary)
 
 main()
