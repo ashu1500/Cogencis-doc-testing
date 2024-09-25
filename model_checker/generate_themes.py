@@ -138,15 +138,26 @@ def get_overall_document_summary(llm_model, chunk_list):
 def theme_extraction_per_chunk(chunk_text, llm):
     ''' Extract themes for each chunk'''
     try:
+        # template = """<s>[INST] <<SYS>>
+        # You are a helpful assistant. Generate concise and relevant key headers based on the financial information in the text.
+        # Ensure the key headers are specific, contextually complete, and avoid any ambiguous or overly broad statements
+        # <</SYS>>
+        # Generate exactly 2 short and concise key headers (maximum 3-4 words each) from the following text. No explanations needed and don't include company name, numbers,country names or person names in key headers.The key haeders must be complete and meaningful.Avoid long phrases or sentences, and ensure the key header is a complete concept or topic. Avoid overly specific details such as timeframes, numbers, or minor specifics. Focus on capturing the essence of the information.
+        # text: {text}
+        # key headers:
+        # """
         template = """<s>[INST] <<SYS>>
-        You are a helpful assistant. Generate concise and relevant key headers based on the financial information in the text.
-        Ensure the key headers are specific, contextually complete, and avoid any ambiguous or overly broad statements
+        You are a helpful assistant. Generate concise, specific, and complete key headers based on the financial information in the text. 
+        Key headers should be suitable as stand-alone titles and reflect complete concepts without being overly broad or incomplete.
         <</SYS>>
-        Generate exactly 2 short and concise key headers (maximum 3-4 words each) from the following text. No explanations needed and don't include company name, numbers,country names or person names in key headers.The key haeders must be complete and meaningful.Avoid long phrases or sentences, and ensure the key header is a complete concept or topic. Avoid overly specific details such as timeframes, numbers, or minor specifics. Focus on capturing the essence of the information.
+        Generate exactly 2 key headers from the following text. 
+        - Key headers must be 3-4 words each, complete, and suitable as titles.
+        - Do not include company names, numbers, country names, or person names.
+        - Avoid generating incomplete or cut-off phrases, ambiguous terms, or overly simplistic expressions (e.g., "improves," "built").
+        - Focus on well-defined topics that fully capture the core concept.
         text: {text}
         key headers:
         """
-
         prompt = PromptTemplate(template=template, input_variables=["text"])
         result = llm.generate([prompt.format(text=chunk_text)])
         return result
