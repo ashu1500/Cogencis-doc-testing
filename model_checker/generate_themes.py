@@ -232,7 +232,7 @@ def question_theme_extraction_per_chunk(chunk_text, llm):
         Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content.
         Please ensure that your responses are socially unbiased and positive in nature.
         <</SYS>>
-        Generate exactly one concise key header (strictly 3-4 words) relevant for financial information from the given text.No explanation needed.Do not include company name, number, or person name in the key header.The key header must be complete,meaningful and must not be a question. Avoid long phrases or sentences.
+        Generate exactly one concise key header (strictly 3-4 words) relevant for financial information from the given text.No explanation needed.Do not include company name, number, or person name in the key header.The key header must be complete,meaningful and must not be a question. Avoid long phrases or sentences, and ensure the key header is a complete concept or topic. Avoid overly specific details such as timeframes, numbers, or minor specifics. Focus on capturing the essence of the information.
         {text}
         key header:
         """
