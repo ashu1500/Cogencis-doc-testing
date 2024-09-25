@@ -194,7 +194,7 @@ def extract_headers_from_themes(output_text):
 def extract_headers_from_question_themes(output_text):
     ''' Get headers list for themes'''
     try:
-        start_index = output_text.find("key header:")
+        start_index = output_text.find("header:")
         themes_section = output_text[start_index:]
         themes_lines = themes_section.split('\n')
         themes_lines = [line.strip() for line in themes_lines[1:] if line.strip()]
@@ -242,14 +242,20 @@ def question_theme_extraction_per_chunk(chunk_text, llm):
     ''' Extract themes for each chunk'''
     try:
         template = """<s>[INST] <<SYS>>
-        <s>[INST] <<SYS>>
-        You are a helpful, respectful, and honest assistant. Always answer as helpfully as possible, while being safe.
-        Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content.
-        Please ensure that your responses are socially unbiased and positive in nature.
+        You are a helpful assistant. Generate concise, specific, and complete header based on the financial information in the text. 
+        header should be suitable as stand-alone titles and reflect complete concepts without being overly broad or incomplete.
         <</SYS>>
-        Generate exactly one concise key header (strictly 3-4 words) relevant for financial information from the given text.No explanation needed.Do not include company name, number, or person name in the key header.The key header must be complete,meaningful and must not be a question. Avoid long phrases or sentences, and ensure the key header is a complete concept or topic. Avoid overly specific details such as timeframes, numbers, or minor specifics. Focus on capturing the essence of the information.
-        {text}
-        key header:
+        Generate exactly one short and concise header from the following text. 
+        - Header must be 3-4 words long and concise, strictly not exceeding 4 words. It should be fully formed, meaningful, and complete.
+        - Do not include company names, numbers, country names, or person names.
+        - Avoid generating full sentences, explanations, or long phrases. Focus on concise, well-defined topic that can be used as title.
+        - Avoid generating incomplete or partial comparison (e.g., "X vs Y") or any unfinished phrases (e.g., "accounted for").
+        - Do not use overly simplistic terms such as "improves" or "built," or vague phrases that do not convey a complete topic.
+        - Do not generate long sentences, explanations, or phrases that read like full sentences (e.g., "Our commitment to bringing...").
+        - Focus on capturing the core essence of the topic without minor details or excessive specificity, such as dates or figures.
+        - Header should be specific and contextually complete, ensuring it can stand alone as a title and is not too broad or vague.
+        text: {text}
+        header:
         """
 
         prompt = PromptTemplate(template=template, input_variables=["text"])
