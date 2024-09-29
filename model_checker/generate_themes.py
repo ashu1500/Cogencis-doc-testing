@@ -1,11 +1,10 @@
 import os
-import logging
 from transformers import pipeline
 from langchain_huggingface import HuggingFacePipeline
 from langchain_core.prompts import PromptTemplate
 import subprocess
-# from sentence_transformers import SentenceTransformer
-# from sentence_transformers.util import cos_sim
+from sentence_transformers import SentenceTransformer
+from sentence_transformers.util import cos_sim
 from accelerate import Accelerator
 import re
 import datetime
@@ -19,22 +18,31 @@ accelerator = Accelerator()
 def load_llama_model():
     ''' Load llama model from the local folder'''
     try:
-        logging.info("llama model loading")
+        print("llama model loading")
         hf_token="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"
         subprocess.run(f'huggingface-cli login --token={hf_token}',shell=True)
         model_path= os.path.join("model")
         model_pipe = pipeline(task="text-generation", model = model_path,tokenizer= model_path,device_map="auto")
         model_pipe= accelerator.prepare(model_pipe)
         final_pipeline= HuggingFacePipeline(pipeline = model_pipe, model_kwargs = {'temperature':0})
-        logging.info("model loaded successfully")
+        print("model loaded successfully")
         return final_pipeline
     except Exception as e:
-        logging.error(e)
+        print(e)
         raise e
 
 llm_model= load_llama_model()
 
 # Overall document summary
+
+def generate_embeddings(e5_model,chunk_text):
+    ''' Generate embeddings for the document chunks'''
+    try:
+        chunk_embeddings= e5_model.encode(str(chunk_text), normalize_embeddings=True)
+        return chunk_embeddings
+    except Exception as ex:
+        print(f"Error in generate embeddings. {ex.args}")
+        raise ex
 
 def merge_strings_optimized(strings):
     ''' Merge strings if string length is less than 300'''
@@ -153,6 +161,112 @@ def get_overall_document_summary(llm_model, chunk_list):
     except Exception as e:
         print(f"Error generating overall summary: {e}")
         raise e
+
+def split_paragraph(paragraph):
+    ''' Split paragraph into summary points'''
+    try:
+        abbreviations = {
+            'Mr.': 'Mr_placeholder',
+            'Mrs.': 'Mrs_placeholder',
+            'Ms.': 'Ms_placeholder',
+            'Dr.': 'Dr_placeholder',
+            'Prof.': 'Prof_placeholder',
+            'St.': 'St_placeholder',
+            'Mr. C': 'Mr_C_placeholder'  
+        }
+
+        for abbr, placeholder in abbreviations.items():
+            paragraph = paragraph.replace(abbr, placeholder)
+    
+        split_regex = r'(?<!\d)[.](?!\d)'
+        points = re.split(split_regex, paragraph)
+        points = [point.strip() for point in points if point.strip()]
+        for i, point in enumerate(points):
+            for abbr,placeholder in abbreviations.items():
+                points[i] = points[i].replace(placeholder, abbr)
+        return points
+    except Exception as ex:
+        print(f"Error in split paragraph. {ex.args}")
+        raise ex
+
+def remove_unnecessary_emojis(text_data):
+    ''' Remove unwanted emojis from the text'''
+    try:
+        emoji_pattern = re.compile(
+        "["  
+        "\U0001F600-\U0001F64F"  # emoticons
+        "\U0001F300-\U0001F5FF"  # symbols & pictographs
+        "\U0001F680-\U0001F6FF"  # transport & map symbols
+        "\U0001F1E0-\U0001F1FF"  # flags (iOS)
+        "\U00002702-\U000027B0"  # dingbats
+        "\U000024C2-\U0001F251" 
+        "]+", flags=re.UNICODE)
+        
+        final_text= re.sub(emoji_pattern,'',text_data)
+        final_text = final_text.replace("\u230f", "").replace("\u2139", "")
+        final_text = final_text.replace("\ud83e\udd14","")
+        return final_text
+    except Exception as ex:
+        print(f"Error in remove unnecessary emojis. {ex.args}")
+        raise ex
+
+def reduce_overall_summary(text, limit=12000):
+    ''' Reduce overall summary in a given word limit'''
+    try:
+        sentences = re.split(r'(?<=[.!?]) +', text)
+        reduced_text = ''
+        current_length = 0
+        
+        for sentence in sentences:
+            if current_length + len(sentence) > limit:
+                break
+            reduced_text += sentence + ' '
+            current_length += len(sentence) + 1
+    
+        return reduced_text.strip()
+    except Exception as ex:
+        print(f"Error in reducing overall summary. {ex.args}")
+        raise ex
+
+def remove_similar_mda_overall_summary(embedding_model,overall_summary):
+    ''' Check similarity between MDA summary points'''
+    try:
+        print("Removing similar MDA summary points")
+        indices_to_remove=set()
+        processed_summary= overall_summary.replace('*','')
+        final_summary= remove_unnecessary_emojis(processed_summary)
+        summary_points= split_paragraph(final_summary)
+        summary_embeddings= [generate_embeddings(embedding_model,summary) for summary in summary_points]
+        for i in range(len(summary_embeddings)):
+            for j in range(i+1,len(summary_embeddings)):
+                if (cos_sim(summary_embeddings[i],summary_embeddings[j]).item())>0.89:
+                  indices_to_remove.add(j)
+        filtered_summary_points = [point for idx, point in enumerate(summary_points) if idx not in indices_to_remove]
+        keywords = ["management team", "presentation", "website", "recording","q&a","representative","investor","greetings","discussion","date","upload","morning","afternoon","call"]
+        filtered_summary = [summary_point for summary_point in filtered_summary_points if not any(keyword.lower() in summary_point.lower() for keyword in keywords)]
+        refined_summary= ".".join(filtered_summary)
+        final_summary= reduce_overall_summary(refined_summary)
+
+        return final_summary
+    except Exception as ex:
+        print(f"Error in remove similar MDA overall summary points. {ex.args}")
+        raise ex
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def theme_extraction_per_chunk(chunk_text, llm):
     ''' Extract themes for each chunk'''
@@ -357,7 +471,8 @@ def main():
     # print("Discussion_themes: ",indigo_discussion_themes)
     # indigo_question_themes= get_final_question_themes(llm_model,indigo_questions_list)
     # print("Questions_themes: ",indigo_question_themes)
-
+    
+    e5_embedding_model = SentenceTransformer('intfloat/e5-large')
     maruti_chunks_list= ["Management Discussion and Analysis.Overview.The year 2018-19 flagged off with promising economic outlook supported by benign inflation, favourable interest rates, close to normal rainfall forecast and strong global economic growth. In Q1, the Indian economy registered a robust growth of 8% which gave an indication of economic activities returning to near normal post the GST roll-out. However, the momentum gained at the start didn’t sustain during the rest of the year and the economy faced major challenges leading to a slowdown in domestic consumption in the later part of the year. The pace of global economy also slowed down and couldn’t provide meaningful support to the Indian economy. The Government and the RBI undertook a slew of measures to provide the necessary stimulus to the economy..FY'15 FY'16 FY'17 FY'18 FY'19 Source: CSO.India’s passenger vehicle market grew by 2.7% in 2018-19 against 7.9% in 2017-18. This is the lowest annual industry growth recorded in previous seven years. Among the three broad industry segments, the utility vehicles segment that accounts for about 28% of industry sales, grew by 2.1%. The other two segments, passenger cars and vans, grew by 2.0% and 13.1% respectively. The urban markets witnessed weak demand while the non-urban markets saw relatively better growth. The demand for diesel models continued its weakening trend, and its industry share declined from 40% to 36%..The Company posted a volume growth of 5.3% in passenger vehicles in the domestic market (against the industry growth of 2.7%). Including the Light Commercial Vehicle (LCV) segment, the Company’s domestic sales growth stood at 6.1%..Domestic Passenger Vehicle Industry Growth.Board’s Report Corporate Governance Report Management Discussion & Analysis Business Responsibility Report.Contrary to expectations, sales were also impacted in export markets due to country specific reasons..The year also witnessed adverse commodity prices and foreign exchange movement.",
                         'Due to weak market situation, the Company could not take adequate price increases to neutralise the increase in input costs..Higher expenditure on marketing and sales promotions did not generate proportionate volume increase as demand remained low, impacting the profit margins..However, the Company could partially off-set the impact of unfavourable factors by stepping up cost reduction measures..During the year, the business partnership between Suzuki Motor Corporation and Toyota Motor Corporation (TMC), Japan started taking shape..The Company is likely to benefit immensely from this partnership by gaining access to the new-age technologies and from the mutual supply of vehicles..The Company has always endeavoured to provide clean technology in its products. India is at a nascent stage of using clean automotive technologies and the Company aims to be a front-runner in providing clean technology to the mass market. Using hybrid technology is the first step in this direction..This partnership with TMC is helping the Company to gain access to the hybrid technology. If the Company were to develop this technology on its own, it would take considerable time and significant investments. Also, many emission and safety related regulations are coming in the near future requiring more resources..Sourcing hybrid technology from Toyota could free-up the Company resources to devote them on other priorities..Combining the global volume of Suzuki and Toyota will provide a significant scale and make technology more affordable specially for a price-sensitive market like India..This partnership is also bringing opportunity to increase sales volume of the Company’s models by selling through Toyota Kirloskar Motor India. The Company is offering Baleno, Vitara Brezza, Ciaz and Ertiga to Toyota. Automobile industry is highly capital intensive and requires lots of investments in products, technologies and facilities.',
                         'For realising adequate return on investments, increasing volume per model and per platform is the key. This arrangement will bring in incremental volume for the Company and help maximise volume per model/platform.',
@@ -383,7 +498,8 @@ def main():
                         "Disclaimer.Statements in this Management Discussions and Analysis describing the Company's objectives, projections, estimates and expectations are categorised as ‘forward looking statements' within the meaning of applicable laws and regulations. Actual results may differ substantially or materially from those expressed or implied. Important developments that could affect the Company's operations include trends in the domestic auto industry, competition, rise in input costs, exchange rate fluctuations, and significant changes in the political and economic environment in India, environmental standards, tax laws, litigation and labour relations."
     ]
     overall_doc_summary= get_overall_document_summary(llm_model,maruti_chunks_list)
-    print(overall_doc_summary)
+    final_overall_doc_summary= remove_similar_mda_overall_summary(e5_embedding_model,overall_doc_summary)
+    print(final_overall_doc_summary)
 
     print("Completed")
 
