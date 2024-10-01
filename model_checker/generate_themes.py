@@ -437,6 +437,169 @@ def get_final_question_themes(llm,input_list):
         raise ex
 
 
+#Theme based summary
+
+def extract_summary_section_perchunk(text):
+    """Post processing to extract summary section from the text."""
+    try:
+        keyword = "SUMMARY:"
+        keyword_pos = text.find(keyword)
+        if keyword_pos != -1:
+            summary = text[keyword_pos + len(keyword):].strip()
+            return summary
+        else:
+            print("Keyword 'SUMMARY' not found in the text.")
+            return None
+    except Exception as ex:
+        print(f"Error in extract summary section per chunk. {ex.args}")
+        raise ex
+
+def summary_generation_perchunk(theme, text, llm, num_points):
+    """Generate summary for each chunk based on the keywords."""
+    try:
+        print("Entering summary generation per chunk")
+        template = f"""
+        Generate a summary consisting of exactly {num_points} bullet points based on the following text. 
+        - Each bullet point must be at least 20 words long, complete, and relevant to the theme '{theme}'. If a point is less than 20 words, expand it with only relevant information.
+        - Start each point with a standard bullet (•). Do not use any other symbols, emojis, or icons.
+        - Do not change or substitute words in a way that alters the meaning of the bullet point.
+        - The summary must be written in the third person, using third-person terms like 'they', 'their' or specific nouns and do not use words like 'We', 'Our','us'.
+        - Maintain the original tense of the sentences in the text. If a sentence is in the present tense, the summary should also be in the present tense.
+        - Avoid all headers, titles, or additional comments. Only the bullet points should be present.
+        - Ensure that each bullet point is a complete sentence with proper context, strictly based on the provided text.
+        - Do not omit any numerical values or specific details mentioned in the text.
+        - Do not introduce any information, details, or numerical values that are not directly mentioned in the text. 
+        - Avoid analysis, interpretations, or inferences not directly mentioned in the text.
+        - Do not start points with ambiguous phrases without clearly specifying what is being referred to; ensure every point is understandable on its own.
+        - Ensure that each bullet point clearly specifies what specific topic is being discussed so that it is understandable without needing additional context.
+        - Points should be clear, logical, and sequenced coherently, strictly adhering to the content of the provided text.
+
+        TEXT:
+        {text}
+
+        SUMMARY:
+        """
+        prompt = PromptTemplate(template=template, input_variables=["text", "theme"])
+        result = llm.generate([prompt.format(text=text, theme=theme)])
+        final = extract_summary_section_perchunk(result.generations[0][0].text)
+        return final
+    except Exception as ex:
+        print(f"Error in summary generation per chunk. {ex.args}")
+        raise ex
+    finally:
+        print("Exiting summary generation per chunk")
+
+def remove_unnecessary_emojis(text_data):
+    ''' Remove unwanted emojis from the text'''
+    try:
+        final_text=[]
+        text_lines= text_data.split('\n')
+        bullet_point = '•'
+        emoji_pattern = re.compile(
+        "["  
+        "\U0001F600-\U0001F64F"  # emoticons
+        "\U0001F300-\U0001F5FF"  # symbols & pictographs
+        "\U0001F680-\U0001F6FF"  # transport & map symbols
+        "\U0001F1E0-\U0001F1FF"  # flags (iOS)
+        "\U00002702-\U000027B0"  # dingbats
+        "\U000024C2-\U0001F251" 
+        "]+", flags=re.UNICODE)
+        for point in text_lines:
+            final_point= re.sub(emoji_pattern, lambda match: match.group(0) if match.group(0) == bullet_point else '', point)
+            final_text.append(final_point)
+        processed_summary = '\n'.join(final_text)
+        return processed_summary
+    except Exception as ex:
+        print(ex)
+        raise ex
+
+def remove_unwanted_headers(text):
+    """Remove numbered headers and generate as bullet points"""
+    try:
+        lines = text.strip().split('\n')
+        processed_lines = []
+        for line in lines:
+            line= line.strip()
+            if not line:
+                continue
+            line = re.sub(r'\d+\. ', '\n• ', line).strip()
+            if line.startswith("•"):
+                colon_pos = line.find(":")
+                if colon_pos != -1:
+                    processed_line = "• " + line[colon_pos + 1:].strip()
+                    processed_lines.append(processed_line)
+                else:
+                    processed_line = line.strip()
+                    processed_lines.append(processed_line)
+    
+            else:
+                processed_lines.append(line.strip())
+        processed_text = '\n'.join(processed_lines)
+        final_processed_text = re.sub(r'\n\n+', '\n', processed_text)
+        return final_processed_text
+    except Exception as ex:
+        print(f"Error in remove unwanted headers. {ex.args}")
+        raise ex
+
+
+def generate_theme_summary(theme,chunk_list,llm):
+    try:
+        print("Entered theme summary generation")
+        theme_summary=""
+        for chunk in chunk_list:
+            if len(chunk)>0 and len(chunk)<300:
+                chunk_summary= summary_generation_perchunk(theme,chunk,llm,1)
+            elif len(chunk)>=300 and len(chunk)<500:
+                chunk_summary= summary_generation_perchunk(theme,chunk,llm,2)
+            elif len(chunk)>=500 and len(chunk)<1000:
+                chunk_summary= summary_generation_perchunk(theme,chunk,llm,3)
+            elif len(chunk)>=1000:
+                chunk_summary= summary_generation_perchunk(theme,chunk,llm,6)
+            chunk_summary_list= chunk_summary.split('\n')[:5]
+            chunk_summary_list = list(map(str.strip, chunk_summary_list))
+            actual_chunk_summary= '\n'.join(chunk_summary_list)
+            theme_summary+='\n'
+            theme_summary+= actual_chunk_summary
+
+        filtered_summary= theme_summary.replace('*','')
+        removed_summary= remove_unnecessary_emojis(filtered_summary)
+        processed_summary= remove_unwanted_headers(removed_summary)
+        new_processed_summary= processed_summary.replace('•','\n•')
+        
+        return new_processed_summary
+    except Exception as ex:
+        print(f"Error in generate theme summary. {ex.args}")
+        raise ex
+
+
+def get_document_theme_summary(chunk_dictionary,llm):
+    '''Get theme-based summary of document'''
+    try:
+        print("Entering document theme summary")
+        theme_based_summary={}
+        summary_generation_time={}
+        for theme,chunk in chunk_dictionary.items():
+            if chunk:
+                print("Theme summary started")
+                theme_based_summary[theme]= generate_theme_summary(theme,chunk,llm)
+                print("Theme summary generated")
+                summary_generation_time[theme]= str(datetime.datetime.now().time())
+                print(datetime.datetime.now())
+            else:
+                continue
+        final_theme_based_summary = {k: v for k, v in theme_based_summary.items() if v is not None and v.strip() not in ('')}
+        return final_theme_based_summary,summary_generation_time
+    except Exception as ex:
+        print(f"Error in get document theme summary. {ex.args}")
+        raise ex
+    
+    finally:
+        print("Exiting document theme summary")
+
+
+
+
+
 
 def main():
     indigo_discussion_data= ['Good evening, everyone, and thank you for joining us for the first quarter of fiscal year 2025 earnings call. We have with us our Chief Executive Officer - Pieter Elbers and our Chief Financial Officer — Gaurav Negi to discuss the financial performance and are available for the Q&A session.',
@@ -547,11 +710,24 @@ def main():
     ]
 
 
+    titan_mda_relevant_dict={
+        "WATCHES AND WEARABLES DIVISION": ['The Management is convinced that the opportunity for “Watch as an Accessory” is timeless and is committed to capitalize on it. While the investment in design and new product development has happened consistently over the last 3-4 years, considerable focus is now being given to re- imagining the World of Titan channel, transformation of the Multi-Brand watch outlet, marketing communication investments and ratcheting up the omni-channel play.','The very good work done through the War-on-Waste programme is also being continued.'],
+        "WEARABLES": ['The Company significantly increased its capability for this domain through the acquisition of HUG Innovations in Financial Year 2019-20, while simultaneously improving its product and app design capabilities as well. The result is a steady pipeline of exciting new products, services and ecosystems starting as early as in 2021. Reflex 3, the Fastrack wrist band launched in February 2021 on the Company’s own proprietary platform, is a sign of things to come.','The Management is confident that Titan will establish itself as a prominent player in the Wearables market within the next 18 months through its product/service/ecosystem efforts as well as the distribution expansion into mobile phone outlets and considerable marketing investments.'],
+        "JEWELLERY DIVISION": ['The opportunity for the Jewellery Division during Financial Year 2022-23 as well as in the medium term is excellent. Apart from the low market share and the increasing competitive advantage and brand preference, the Division is continuing to push many levers for growth. Multi-pronged efforts within the wedding market (including a new Engagement Rings focus), a “Many Indias” programme to increase state-level relevance, keeping the momentum behind the Gold Exchange and Golden Harvest opportunities, keeping the “Middle India” network expansion effort going.','The Zoya and Mia brands will also be riding firm on the momentum generated during Financial Year 2021-22 towards their exciting future.','The Division has also created a well-oiled process to keep the total inventory and capital employed in check, which has become embedded and sustainable.','CaratLane has had a scorching growth in Financial Year 202 1- 22 and reported a profit for the first time. The powerful omni- channel approach, very high technology capability, innovative product lines and the new-age employee culture have combined exceptionally well. The Company is very confident that CaratLane has all the ingredients for creating history and substantial stakeholder value in the next few years.','Responsible Sourcing - Progressing definitively towards a sustainable future: a) A robust rollout of a formal ‘Responsible Sourcing’ program to all vendors, to upgrade their units to the “Standard” level (Cottage, Basic, Standard and World Class, being the 4 increasing levels of evolution) across People, Process, Place and Planet parameters. b) Very good progress achieved on the integrated 3-year program for diamond sourcing, ensuring pipeline integrity by eliminating any mixing up of synthetics, and sourcing stones from sight holders / international mines having the right labour practices and conditions in their supply chains. c) 100% of fresh gold procured from banks is London Bullion Market Association (LBMA) certified ensuring highest purity, quality and mined from ethical sources. The rest of the gold is recycled exchanged gold from customers.A revised and formal Titan Supplier Engagement Protocol (TSEP ver 2.0) was also rolled out to all suppliers on these counts.'],
+        "INTERNATIONAL BUSINESS": ['The much-awaited launch of Tanishq in Dubai has been very successful, with customers giving a big thumbs-up for the excellent products and collections, the exquisite store and the superlative customer experience. The expansion into more stores in the UAE and the GCC countries is on the cards. The NRI/PIO jewellery opportunity is very large and the Company is committed to making this a meaningful part of its portfolio in the next 5 years.'],
+        "EYEWEAR DIVISION": ['The Eyewear Division transformed itself during Financial Year 2021-22 by unlocking substantial value from its operations: discount reduction, channel-mix improvement, product-mix improvement, in-house production enhancement, store and lab closures, other fixed cost management, all of these have contributed to a new platform of profitability that is quite sustainable. The Division is now all poised to grow in sales in the medium term and leverage this foundation.',"The Division has also worked substantially on product innovations in lenses (Antifog, Clearsight, Neo progressives) and frames (Indifit, Signature, Glam, etc.) as well as channels (Ecolight low cost stores), all of which significantly improved the Division's competitive advantage.","The overall opportunity in this market is vast on account of three things. The low market share that the Division has, the millions of people in the country with unaddressed refractive error and the new lifestyle (excessive screen time) that is accelerating the need for vision correction among the youth."]
+
+    }
 
 
-    overall_doc_summary= get_overall_document_summary(llm_model,adani_chunk_list)
+
+
+    # overall_doc_summary= get_overall_document_summary(llm_model,adani_chunk_list)
+
     # final_overall_doc_summary= remove_similar_mda_overall_summary(e5_embedding_model,overall_doc_summary)
-    print(overall_doc_summary)
+    # print(overall_doc_summary)
+    theme_based_summary= get_document_theme_summary(titan_mda_relevant_dict,llm_model)
+    print(theme_based_summary)
 
     print("Completed")
 
