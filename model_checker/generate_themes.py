@@ -562,11 +562,11 @@ def generate_theme_summary(theme,chunk_list,llm):
             theme_summary+= actual_chunk_summary
 
         filtered_summary= theme_summary.replace('*','')
-        removed_summary= remove_unnecessary_emojis(filtered_summary)
-        processed_summary= remove_unwanted_headers(removed_summary)
-        new_processed_summary= processed_summary.replace('•','\n•')
+        # removed_summary= remove_unnecessary_emojis(filtered_summary)
+        # processed_summary= remove_unwanted_headers(removed_summary)
+        # new_processed_summary= processed_summary.replace('•','\n•')
         
-        return new_processed_summary
+        return filtered_summary
     except Exception as ex:
         print(f"Error in generate theme summary. {ex.args}")
         raise ex
