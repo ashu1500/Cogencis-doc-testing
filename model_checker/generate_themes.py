@@ -266,49 +266,18 @@ def remove_similar_mda_overall_summary(embedding_model,overall_summary):
         print(f"Error in remove similar MDA overall summary points. {ex.args}")
         raise ex
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def theme_extraction_per_chunk(chunk_text, llm):
     ''' Extract themes for each chunk'''
     try:
-        # template = """<s>[INST] <<SYS>>
-        # You are a helpful assistant. Generate concise and relevant key headers based on the financial information in the text.
-        # Ensure the key headers are specific, contextually complete, and avoid any ambiguous or overly broad statements
-        # <</SYS>>
-        # Generate exactly 2 short and concise key headers (maximum 3-4 words each) from the following text. No explanations needed and don't include company name, numbers,country names or person names in key headers.The key haeders must be complete and meaningful.Avoid long phrases or sentences, and ensure the key header is a complete concept or topic. Avoid overly specific details such as timeframes, numbers, or minor specifics. Focus on capturing the essence of the information.
-        # text: {text}
-        # key headers:
-        # """
         template = """<s>[INST] <<SYS>>
-        You are a helpful assistant. Generate concise, specific, and complete headers based on the financial information in the text. 
-        headers should be suitable as stand-alone titles and reflect complete concepts without being overly broad or incomplete.
+        You are a helpful assistant. Generate concise and relevant key headers based on the financial information in the text.
+        Ensure the key headers are specific, contextually complete, and avoid any ambiguous or overly broad statements
         <</SYS>>
-        Generate exactly 2 headers from the following text. 
-        - Headers must be 3-4 words long and concise, strictly not exceeding 4 words. They should be fully formed, meaningful, and complete.
-        - Do not include company names, numbers, country names, or person names.
-        - Avoid generating full sentences, explanations, or long phrases. Focus on concise, well-defined topics that can be used as titles.
-        - Avoid generating incomplete or partial comparisons (e.g., "X vs Y") or any unfinished phrases (e.g., "accounted for").
-        - Do not use overly simplistic terms such as "improves" or "built," or vague phrases that do not convey a complete topic.
-        - Do not generate long sentences, explanations, or phrases that read like full sentences (e.g., "Our commitment to bringing...").
-        - Focus on capturing the core essence of the topic without minor details or excessive specificity, such as dates or figures.
-        - Headers should be specific and contextually complete, ensuring they can stand alone as a title and are not too broad or vague.
+        Generate 2 key headers (maximum 3-4 words each) from the following text. No explanations needed and don't include company name, numbers,country names or person names in key headers.The key headers must be contextually complete. Avoid long phrases or sentences.Avoid generating incomplete comparison and don't include verbs in key headers.
         text: {text}
-        headers:
+        key headers:
         """
+
         prompt = PromptTemplate(template=template, input_variables=["text"])
         result = llm.generate([prompt.format(text=chunk_text)])
         return result
@@ -316,10 +285,11 @@ def theme_extraction_per_chunk(chunk_text, llm):
         print(f"Error in theme extraction per chunk. {ex.args}")
         raise ex
 
+
 def extract_headers_from_themes(output_text):
     ''' Get headers list for themes'''
     try:
-        start_index = output_text.find("headers:")
+        start_index = output_text.find("key headers:")
         themes_section = output_text[start_index:]
         themes_lines = themes_section.split('\n')
         themes_lines = [line.strip() for line in themes_lines[1:] if line.strip()]
@@ -337,6 +307,7 @@ def extract_headers_from_themes(output_text):
     except Exception as ex:
         print(f"Error in extract headers from themes. {ex.args}")
         raise ex
+
     
 def extract_headers_from_question_themes(output_text):
     ''' Get headers list for themes'''
@@ -842,7 +813,7 @@ def main():
     "Employee Safety: The Company's approach to dealing with the unprecedented change the pandemic brought was steeped in the core value of Unconditional Positive Regard for People. The first and foremost step to deal with the pandemic also was to ensure that all employees in every part of the organization were safe and healthy. People over business is the approach that was adopted, be it in regards to resumption of services, opening of stores or people coming back to work. Utmost care and precaution was taken when resuming services. Leading by example is the other principle followed. From working from home when it was prescribed to following the social distancing norms once offices resumed, leaders walked the talk.",
     "e The economic circumstances of the Company's customers (the Upper Middle Class) are expected to be as good as in FY 2021-22 or perhaps even better, given that virtually all companies are giving out raises to their employees, with its cascading effects on other segments of the population The rural economy is also likely to be good, given the rains that we have had, and it will also have its cascading positive effect on other consuming segments During FY 2020-21, the brands of the Company have improved their competitive positions in each of the categories they operate in The Management of the Company has emerged intellectually and emotionally stronger and is going into FY 2021-22 with a set of proven initiatives for customer"
     ]
-    titan_mda_themes= get_final_question_themes(llm_model,titan_themes_chunks)
+    titan_mda_themes= get_final_transcript_themes(llm_model,titan_themes_chunks)
     print(titan_mda_themes)
 
     print("Completed")
