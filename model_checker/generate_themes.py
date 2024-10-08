@@ -547,6 +547,7 @@ def generate_theme_summary(theme,chunk_list,llm):
         print("Entered theme summary generation")
         theme_summary=""
         for chunk in chunk_list:
+            print(len(chunk))
             if len(chunk)>0 and len(chunk)<300:
                 chunk_summary= summary_generation_perchunk(theme,chunk,llm,1)
             elif len(chunk)>=300 and len(chunk)<500:
@@ -580,6 +581,7 @@ def get_document_theme_summary(chunk_dictionary,llm):
         for theme,chunk in chunk_dictionary.items():
             if chunk:
                 print("Theme summary started")
+                print(len(chunk))
                 theme_based_summary[theme]= generate_theme_summary(theme,chunk,llm)
                 print("Theme summary generated")
                 print(datetime.datetime.now())
