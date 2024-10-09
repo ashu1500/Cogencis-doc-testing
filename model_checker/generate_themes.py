@@ -416,6 +416,7 @@ def get_final_question_themes(llm,input_list):
         for header in chunk_headers_list:
             all_chunk_header+=header
         print("All themes generated")
+        print(all_chunk_header)
         ls=[actual_chunk_headers.append(x) for x in all_chunk_header if x not in actual_chunk_headers]
         final_themes= set(list(map(lambda x: str(x).title(), actual_chunk_headers)))
         return final_themes
