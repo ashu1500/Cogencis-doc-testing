@@ -347,6 +347,7 @@ def get_final_transcript_themes(llm,input_list):
         for header in chunk_headers_list:
             all_chunk_header+=header
         print("All themes generated")
+        print(all_chunk_header)
         ls=[actual_chunk_headers.append(x) for x in all_chunk_header if x not in actual_chunk_headers]
         final_themes= set(list(map(lambda x: str(x).title(), actual_chunk_headers)))
         return final_themes
@@ -816,8 +817,8 @@ def main():
     # print(overall_doc_summary)
     # theme_based_summary= get_document_theme_summary(titan_mda_relevant_dict,llm_model)
     # print(theme_based_summary)
-    # titan_mda_themes= get_final_transcript_themes(llm_model,titan_themes_chunks)
-    titan_mda_themes= get_final_question_themes(llm_model,titan_themes_chunks)
+    titan_mda_themes= get_final_transcript_themes(llm_model,titan_themes_chunks)
+    # titan_mda_themes= get_final_question_themes(llm_model,titan_themes_chunks)
     print(titan_mda_themes)
 
     print("Completed")
