@@ -273,7 +273,7 @@ def theme_extraction_per_chunk(chunk_text, llm):
         You are a helpful assistant. Generate concise and relevant key headers based on the financial information in the text.
         Ensure the key headers are specific, contextually complete, and avoid any ambiguous or overly broad statements
         <</SYS>>
-        Generate 2 key headers (maximum 3-4 words each) from the following text. No explanations needed and don't include company name, numbers,country names or person names in key headers.The key headers must be contextually complete. Avoid long phrases,examples or sentences.Avoid generating incomplete comparison and don't include verbs in key headers.
+        Generate 2 key headers (maximum 3-4 words each) from the following text. No explanations needed and don't include company name, numbers,country names or person names in key headers.The key headers must be contextually complete. Avoid long phrases or sentences.Avoid generating incomplete comparison and don't include verbs or examples in key headers.
         text: {text}
         key headers:
         """
